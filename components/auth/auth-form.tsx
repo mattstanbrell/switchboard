@@ -27,8 +27,8 @@ export function AuthForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
-  const [companies, setCompanies] = useState<{ id: number; name: string }[]>([])
-  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null)
+  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([])
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in')
@@ -169,14 +169,14 @@ export function AuthForm() {
                   </Label>
                   <Select
                     value={selectedCompanyId?.toString()}
-                    onValueChange={(value) => setSelectedCompanyId(Number(value))}
+                    onValueChange={(value) => setSelectedCompanyId(value)}
                   >
                     <SelectTrigger className="bg-custom-background border-custom-ui-medium focus:border-custom-accent focus:ring-custom-accent">
                       <SelectValue placeholder="Select a company" />
                     </SelectTrigger>
                     <SelectContent>
                       {companies.map((company) => (
-                        <SelectItem key={company.id} value={company.id.toString()}>
+                        <SelectItem key={company.id} value={company.id}>
                           {company.name}
                         </SelectItem>
                       ))}
