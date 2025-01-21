@@ -19,8 +19,10 @@ export default async function HumanAgentPage() {
   
   const { data: { user }, error: userError } = await supabase.auth.getUser()
   if (userError || !user) {
+    console.error('Auth error:', userError)
     redirect('/')
   }
+  console.log('Authenticated user:', { id: user.id, email: user.email })
 
   // Get agent's profile including team_id
   const { data: profile, error: profileError } = await supabase
@@ -29,12 +31,12 @@ export default async function HumanAgentPage() {
       id,
       full_name,
       team_id,
-      teams (
+      teams!inner (
         id,
         name,
-        team_focus_areas (
+        team_focus_areas!inner (
           focus_area_id,
-          focus_areas (
+          focus_areas!inner (
             id,
             name
           )
@@ -44,10 +46,27 @@ export default async function HumanAgentPage() {
     .eq('id', user.id)
     .single()
 
+  console.log('Profile query result:', {
+    profile,
+    error: profileError?.message,
+    details: profileError?.details,
+    hint: profileError?.hint
+  })
+
   if (profileError) {
     console.error('Profile fetch error:', profileError)
     throw profileError
   }
+
+  // Debug team data
+  console.log('Team data:', {
+    teamId: profile?.team_id,
+    team: profile?.teams?.[0],
+    focusAreas: profile?.teams?.[0]?.team_focus_areas?.map(tfa => ({
+      focusAreaId: tfa.focus_area_id,
+      focusArea: tfa.focus_areas?.[0]
+    }))
+  })
 
   // Only fetch tickets if the agent is assigned to a team
   let tickets: Ticket[] = []
@@ -67,6 +86,13 @@ export default async function HumanAgentPage() {
       `)
       .eq('team_id', profile.team_id)
       .order('created_at', { ascending: false })
+
+    console.log('Tickets query result:', {
+      ticketsCount: ticketsData?.length,
+      error: ticketsError?.message,
+      details: ticketsError?.details,
+      hint: ticketsError?.hint
+    })
 
     if (ticketsError) {
       console.error('Tickets fetch error:', ticketsError)

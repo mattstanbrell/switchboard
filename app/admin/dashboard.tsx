@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FocusAreaManager } from '@/components/admin/focus-area-manager'
 import { TeamManager } from '@/components/admin/team-manager'
 import { AgentRegistration } from '@/components/admin/agent-registration'
+import { createClient } from '@/utils/supabase/client'
 
 interface Props {
   initialProfile: {
@@ -41,6 +42,40 @@ export default function AdminDashboard({
   const [focusAreas, setFocusAreas] = useState(initialFocusAreas)
   const [agents, setAgents] = useState(initialAgents)
   const [teams, setTeams] = useState(initialTeams)
+
+  useEffect(() => {
+    const supabase = createClient()
+
+    // Subscribe to changes in the profiles table
+    const channel = supabase
+      .channel('profiles-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'profiles',
+          filter: `company_id=eq.${initialProfile.company_id}`
+        },
+        async (payload) => {
+          // Fetch the updated list of agents
+          const { data: updatedAgents } = await supabase
+            .from('profiles')
+            .select('id, full_name, team_id')
+            .eq('company_id', initialProfile.company_id)
+            .eq('role', 'AGENT')
+          
+          if (updatedAgents) {
+            setAgents(updatedAgents)
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [initialProfile.company_id])
 
   // Get agents not in any team
   const unassignedAgents = agents.filter(agent => !agent.team_id)
