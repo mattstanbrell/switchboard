@@ -34,41 +34,80 @@ export type Database = {
   }
   public: {
     Tables: {
-      focus_areas: {
+      companies: {
         Row: {
+          created_at: string
           id: number
           name: string
         }
         Insert: {
+          created_at?: string
           id?: number
           name: string
         }
         Update: {
+          created_at?: string
           id?: number
           name?: string
         }
         Relationships: []
       }
+      focus_areas: {
+        Row: {
+          company_id: number | null
+          id: number
+          name: string
+        }
+        Insert: {
+          company_id?: number | null
+          id?: number
+          name: string
+        }
+        Update: {
+          company_id?: number | null
+          id?: number
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "focus_areas_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
+          company_id: number | null
           full_name: string
           id: string
           role: string
           team_id: number | null
         }
         Insert: {
+          company_id?: number | null
           full_name: string
           id: string
           role: string
           team_id?: number | null
         }
         Update: {
+          company_id?: number | null
           full_name?: string
           id?: string
           role?: string
           team_id?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "profiles_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "profiles_team_id_fkey"
             columns: ["team_id"]
@@ -110,14 +149,17 @@ export type Database = {
       }
       teams: {
         Row: {
+          company_id: string | null
           id: number
           name: string
         }
         Insert: {
+          company_id?: string | null
           id?: number
           name: string
         }
         Update: {
+          company_id?: string | null
           id?: number
           name?: string
         }
@@ -170,7 +212,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_companies: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: number
+          name: string
+        }[]
+      }
+      get_user_role: {
+        Args: {
+          user_id: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

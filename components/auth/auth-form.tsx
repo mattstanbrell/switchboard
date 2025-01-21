@@ -3,20 +3,69 @@
 import { createClient } from '@/utils/supabase/client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 export function AuthForm() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
+  const [companies, setCompanies] = useState<{ id: number; name: string }[]>([])
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in')
+
+  const fetchCompanies = async () => {
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .rpc('get_companies')
+      
+      if (error) throw error
+      setCompanies(data || [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load companies')
+    }
+  }
+
+  const handleModeChange = (newMode: 'sign-in' | 'sign-up') => {
+    setMode(newMode)
+    setError(null)
+    setFullName('')
+    setSelectedCompanyId(null)
+    if (newMode === 'sign-up') {
+      fetchCompanies()
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError(null)
+
+    if (mode === 'sign-up' && !selectedCompanyId) {
+      setError('Please select a company')
+      setIsLoading(false)
+      return
+    }
 
     try {
       const supabase = createClient()
@@ -30,6 +79,7 @@ export function AuthForm() {
             data: {
               full_name: fullName,
               role: 'customer',
+              company_id: selectedCompanyId,
             },
           },
         })
@@ -43,17 +93,20 @@ export function AuthForm() {
         router.refresh()
         router.push('/customer')
       } else {
-        const { error: signInError, data: authData } = await supabase.auth.signInWithPassword({
+        const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password,
         })
         if (signInError) throw signInError
-        if (!authData?.user) throw new Error('No user returned from sign in')
+
+        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        if (userError) throw userError
+        if (!user) throw new Error('No user returned from sign in')
 
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('role')
-          .eq('id', authData.user.id)
+          .eq('id', user.id)
           .single()
         
         if (profileError) throw new Error('Unable to fetch user profile')
@@ -79,99 +132,118 @@ export function AuthForm() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4">
-      <div className="w-full max-w-sm space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-bold tracking-tight">
-            {mode === 'sign-in' ? 'Sign in to your account' : 'Create an account'}
-          </h2>
-        </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="-space-y-px rounded-md shadow-sm">
+    <div className="flex items-center justify-center min-h-screen bg-custom-background">
+      <Card className="w-full max-w-sm bg-custom-background-secondary">
+        <CardHeader>
+          <CardTitle className="text-2xl text-center text-custom-text">
+            {mode === 'sign-in' ? 'Welcome back' : 'Create account'}
+          </CardTitle>
+          <CardDescription className="text-center text-custom-text-secondary">
+            {mode === 'sign-in' 
+              ? 'Enter your email to sign in to your account' 
+              : 'Enter your details to create your account'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'sign-up' && (
-              <div>
-                <label htmlFor="fullName" className="sr-only">
-                  Full Name
-                </label>
-                <input
-                  id="fullName"
-                  name="fullName"
-                  type="text"
-                  required
-                  className="relative block w-full rounded-t-md border-0 py-1.5 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                  placeholder="Full Name"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                />
-              </div>
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="fullName" className="text-custom-text">
+                    Full Name
+                  </Label>
+                  <Input
+                    id="fullName"
+                    name="fullName"
+                    type="text"
+                    required
+                    className="bg-custom-background border-custom-ui-medium focus:border-custom-accent focus:ring-custom-accent"
+                    placeholder="John Doe"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="company" className="text-custom-text">
+                    Company
+                  </Label>
+                  <Select
+                    value={selectedCompanyId?.toString()}
+                    onValueChange={(value) => setSelectedCompanyId(Number(value))}
+                  >
+                    <SelectTrigger className="bg-custom-background border-custom-ui-medium focus:border-custom-accent focus:ring-custom-accent">
+                      <SelectValue placeholder="Select a company" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {companies.map((company) => (
+                        <SelectItem key={company.id} value={company.id.toString()}>
+                          {company.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
             )}
-            <div>
-              <label htmlFor="email" className="sr-only">
-                Email address
-              </label>
-              <input
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-custom-text">
+                Email
+              </Label>
+              <Input
                 id="email"
                 name="email"
                 type="email"
                 required
-                className={`relative block w-full ${
-                  mode === 'sign-up' ? '' : 'rounded-t-md'
-                } border-0 py-1.5 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6`}
-                placeholder="Email address"
+                className="bg-custom-background border-custom-ui-medium focus:border-custom-accent focus:ring-custom-accent"
+                placeholder="name@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
-            <div>
-              <label htmlFor="password" className="sr-only">
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-custom-text">
                 Password
-              </label>
-              <input
+              </Label>
+              <Input
                 id="password"
                 name="password"
                 type="password"
                 required
-                className="relative block w-full rounded-b-md border-0 py-1.5 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                placeholder="Password"
+                className="bg-custom-background border-custom-ui-medium focus:border-custom-accent focus:ring-custom-accent"
+                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
-          </div>
 
-          {error && (
-            <div className={`text-sm text-center ${error.includes('check your email') ? 'text-green-600' : 'text-red-500'}`}>
-              {error}
-            </div>
-          )}
+            {error && (
+              <div className={`text-sm text-center ${error.includes('check your email') ? 'text-custom-accent' : 'text-destructive'}`}>
+                {error}
+              </div>
+            )}
 
-          <div>
-            <button
+            <Button
               type="submit"
               disabled={isLoading}
-              className="group relative flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-custom-accent text-white hover:bg-custom-accent/90"
             >
               {isLoading ? 'Loading...' : mode === 'sign-in' ? 'Sign in' : 'Sign up'}
-            </button>
-          </div>
-        </form>
-
-        <div className="text-sm text-center">
-          <button
+            </Button>
+          </form>
+        </CardContent>
+        <CardFooter className="flex justify-center">
+          <Button
             type="button"
-            onClick={() => {
-              setMode(mode === 'sign-in' ? 'sign-up' : 'sign-in')
-              setError(null)
-              setFullName('')
-            }}
-            className="font-medium text-indigo-600 hover:text-indigo-500"
+            variant="link"
+            onClick={() => handleModeChange(mode === 'sign-in' ? 'sign-up' : 'sign-in')}
+            className="text-custom-accent hover:text-custom-accent/90"
           >
             {mode === 'sign-in'
               ? "Don't have an account? Sign up"
               : 'Already have an account? Sign in'}
-          </button>
-        </div>
-      </div>
+          </Button>
+        </CardFooter>
+      </Card>
     </div>
   )
 } 
