@@ -1,0 +1,22 @@
+# Cursor Rules
+
+## Commands
+- Use `npx shadcn@latest` for all shadcn commands (not `npx shadcn-ui@latest`)
+  - For example: `npx shadcn@latest add button`
+  - For example: `npx shadcn@latest init`
+
+## Theme Usage
+- Always use our custom theme colors defined in `tailwind.config.ts`
+- Background colors:
+  - Primary: `bg-custom-background`
+  - Secondary: `bg-custom-background-secondary`
+- Text colors:
+  - Primary: `text-custom-text`
+  - Secondary: `text-custom-text-secondary`
+  - Tertiary: `text-custom-text-tertiary`
+- UI elements:
+  - Faint: `bg-custom-ui-faint`
+  - Medium: `bg-custom-ui-medium`
+  - Strong: `bg-custom-ui-strong`
+- Accent color: `bg-custom-accent` (with `text-white`)
+- For inputs: Use `bg-custom-background-secondary border-custom-ui-medium focus:border-custom-accent focus:ring-custom-accent`

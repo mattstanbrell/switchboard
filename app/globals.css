@@ -2,20 +2,67 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+body {
+  font-family: Arial, Helvetica, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    /* Map our custom theme colors to shadcn semantic tokens */
+    --background: #FFFCF0;
+    --foreground: #100F0F;
+    --card: #F2F0E5;
+    --card-foreground: #100F0F;
+    --popover: #F2F0E5;
+    --popover-foreground: #100F0F;
+    --primary: #24837B;
+    --primary-foreground: #FFFCF0;
+    --secondary: #E6E4D9;
+    --secondary-foreground: #100F0F;
+    --muted: #DAD8CE;
+    --muted-foreground: #6F6E69;
+    --accent: #24837B;
+    --accent-foreground: #FFFCF0;
+    --destructive: #FF0000;
+    --destructive-foreground: #FFFCF0;
+    --border: #DAD8CE;
+    --input: #DAD8CE;
+    --ring: #24837B;
+    --radius: 0.5rem;
+  }
+  .dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-custom-background text-custom-text;
+  }
 }

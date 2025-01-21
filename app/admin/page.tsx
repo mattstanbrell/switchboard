@@ -7,16 +7,15 @@ export default async function AdminPage() {
   const cookieStore = cookies()
   const supabase = await createClient()
   
-  const { data: { session } } = await supabase.auth.getSession()
-  
-  if (!session?.user?.id) {
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError || !user) {
     redirect('/')
   }
 
   const { data: profile } = await supabase
     .from('profiles')
     .select('full_name')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single()
 
   return (
