@@ -2,6 +2,12 @@ import { createClient } from '@/utils/supabase/server'
 import { NextResponse, type NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
 
+interface Profile {
+  id: string
+  role: 'admin' | 'human_agent' | 'customer'
+  company_id: string
+}
+
 // List of public routes that don't require authentication
 const publicRoutes = ['/', '/login', '/auth/confirm', '/auth/auth-code-error', '/register-company']
 
@@ -38,9 +44,11 @@ export async function middleware(request: NextRequest) {
   // If user is logged in and trying to access auth pages, redirect to their role-specific page
   if (user && isPublicRoute) {
     console.log(' [Middleware] User logged in, checking profile...');
-    const { data: profile, error: profileError } = await supabase
+    const { data, error: profileError } = await supabase
       .rpc('get_profile', { user_id: user.id })
       .single()
+    
+    const profile = data as Profile | null
 
     console.log(' [Middleware] Profile check result:', { 
       hasProfile: !!profile, 
@@ -60,9 +68,11 @@ export async function middleware(request: NextRequest) {
   // If user is logged in, check role-based access
   if (user) {
     console.log(' [Middleware] Checking role-based access...');
-    const { data: profile, error: profileError } = await supabase
+    const { data, error: profileError } = await supabase
       .rpc('get_profile', { user_id: user.id })
       .single()
+    
+    const profile = data as Profile | null
 
     console.log(' [Middleware] Role check result:', { 
       hasProfile: !!profile, 

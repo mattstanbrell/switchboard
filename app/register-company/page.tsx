@@ -6,8 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Suspense } from 'react'
 
-export default function RegisterCompany() {
+function RegisterCompanyForm() {
   const searchParams = useSearchParams()
   const error = searchParams.get('error')
   
@@ -19,7 +20,7 @@ export default function RegisterCompany() {
             Register Your Company
           </CardTitle>
           <CardDescription className="text-center text-custom-text-secondary">
-            Set up your company's helpdesk
+            Set up your company&apos;s helpdesk
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -102,5 +103,13 @@ export default function RegisterCompany() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function RegisterCompany() {
+  return (
+    <Suspense>
+      <RegisterCompanyForm />
+    </Suspense>
   )
 }
