@@ -29,25 +29,47 @@ export function AuthForm() {
             emailRedirectTo: `${window.location.origin}/auth/confirm`,
             data: {
               full_name: fullName,
+              role: 'customer',
             },
           },
         })
         if (signUpError) throw signUpError
         
-        if (data.session) {
-          router.refresh()
-          router.push('/')
+        if (!data.session) {
+          setError('Please check your email to confirm your account')
           return
         }
+
+        router.refresh()
+        router.push('/customer')
       } else {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
+        const { error: signInError, data: authData } = await supabase.auth.signInWithPassword({
           email,
           password,
         })
         if (signInError) throw signInError
+        if (!authData?.user) throw new Error('No user returned from sign in')
+
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', authData.user.id)
+          .single()
         
+        if (profileError) throw new Error('Unable to fetch user profile')
+        if (!profile) throw new Error('No profile found')
+
         router.refresh()
-        router.push('/')
+        
+        if (profile.role === 'customer') {
+          router.push('/customer')
+        } else if (profile.role === 'human_agent') {
+          router.push('/human_agent')
+        } else if (profile.role === 'admin') {
+          router.push('/admin')
+        } else {
+          throw new Error('Invalid user role')
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'An error occurred')
@@ -118,7 +140,9 @@ export function AuthForm() {
           </div>
 
           {error && (
-            <div className="text-red-500 text-sm text-center">{error}</div>
+            <div className={`text-sm text-center ${error.includes('check your email') ? 'text-green-600' : 'text-red-500'}`}>
+              {error}
+            </div>
           )}
 
           <div>
