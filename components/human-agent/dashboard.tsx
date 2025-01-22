@@ -1,5 +1,7 @@
 'use client'
 
+import type { Database } from '@/database.types'
+
 import {
   Table,
   TableBody,
@@ -10,33 +12,19 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 
-export interface FocusArea {
-  id: number
-  name: string
-}
+type Tables = Database['public']['Tables']
 
-export interface Ticket {
-  id: number
-  subject: string
-  status: string
-  created_at: string
-  focus_area_id: number
+export type FocusArea = Tables['focus_areas']['Row']
+export type Ticket = Tables['tickets']['Row'] & {
   focus_areas: FocusArea
 }
-
-export interface Team {
-  id: number
-  name: string
+export type Team = Tables['teams']['Row'] & {
   team_focus_areas: Array<{
     focus_area_id: number
     focus_areas: FocusArea
   }>
 }
-
-export interface Profile {
-  id: string
-  full_name: string
-  team_id: number
+export type Profile = Tables['profiles']['Row'] & {
   teams: Team
 }
 

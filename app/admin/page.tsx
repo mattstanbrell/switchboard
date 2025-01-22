@@ -1,6 +1,34 @@
+import type { Database } from '@/database.types'
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import AdminDashboard from './dashboard'
+
+type Tables = Database['public']['Tables']
+type Profile = Tables['profiles']['Row']
+type FocusArea = Tables['focus_areas']['Row']
+type BaseTeam = Tables['teams']['Row']
+type BaseFieldDefinition = Tables['field_definitions']['Row']
+
+interface TeamWithRelations extends BaseTeam {
+  profiles: Array<Pick<Profile, 'id' | 'full_name'>>
+  team_focus_areas: Array<{
+    focus_area_id: number
+  }>
+}
+
+interface FieldOption {
+  label: string
+  value: string
+}
+
+type FieldDefinitionWithOptions = BaseFieldDefinition & {
+  options: FieldOption[] | null
+}
+
+interface AdminProfile {
+  full_name: string
+  company_id: string
+}
 
 export default async function AdminPage() {
   console.log('Starting AdminPage data fetch...')
@@ -19,16 +47,16 @@ export default async function AdminPage() {
     .eq('id', user.id)
     .single()
 
-  if (profileError) {
+  if (profileError || !profile || !profile.company_id) {
     console.error('Profile fetch error:', profileError)
-    throw profileError
+    throw profileError || new Error('Invalid profile data')
   }
   console.log('Admin profile:', { profile })
 
   const { data: focusAreas, error: focusAreasError } = await supabase
     .from('focus_areas')
-    .select('id, name')
-    .eq('company_id', profile?.company_id)
+    .select('id, name, company_id')
+    .eq('company_id', profile.company_id)
     .order('name')
 
   if (focusAreasError) {
@@ -39,13 +67,13 @@ export default async function AdminPage() {
 
   // Get all human agents in the company, including their team_id
   console.log('Fetching agents with query:', {
-    company_id: profile?.company_id,
+    company_id: profile.company_id,
     role: 'human_agent'
   })
 
   const { data: agents, error: agentsError } = await supabase
     .rpc('get_company_profiles', {
-      company_id_input: profile?.company_id
+      company_id_input: profile.company_id
     })
     .eq('role', 'human_agent')
     .order('full_name')
@@ -59,7 +87,7 @@ export default async function AdminPage() {
     count: agents?.length,
     agents,
     query: {
-      company_id: profile?.company_id,
+      company_id: profile.company_id,
       role: 'human_agent'
     }
   })
@@ -70,6 +98,7 @@ export default async function AdminPage() {
     .select(`
       id,
       name,
+      company_id,
       profiles (
         id,
         full_name
@@ -78,7 +107,7 @@ export default async function AdminPage() {
         focus_area_id
       )
     `)
-    .eq('company_id', profile?.company_id)
+    .eq('company_id', profile.company_id)
 
   if (teamsError) {
     console.error('Teams fetch error:', teamsError)
@@ -86,11 +115,37 @@ export default async function AdminPage() {
   }
   console.log('Teams:', { teams })
 
+  // Get field definitions for this company
+  const { data: fieldDefinitions, error: fieldDefinitionsError } = await supabase
+    .from('field_definitions')
+    .select('*')
+    .eq('company_id', profile.company_id)
+    .order('name')
+
+  if (fieldDefinitionsError) {
+    console.error('Field definitions fetch error:', fieldDefinitionsError)
+    throw fieldDefinitionsError
+  }
+  console.log('Field definitions:', { fieldDefinitions })
+
+  if (!profile.full_name) {
+    throw new Error('Invalid admin profile')
+  }
+
+  const adminProfile: AdminProfile = {
+    full_name: profile.full_name,
+    company_id: profile.company_id
+  }
+
   const dashboardProps = {
-    initialProfile: profile!,
-    initialFocusAreas: focusAreas || [],
-    initialAgents: agents || [],
-    initialTeams: teams || []
+    initialProfile: adminProfile,
+    initialFocusAreas: (focusAreas || []) as FocusArea[],
+    initialAgents: (agents || []) as Profile[],
+    initialTeams: (teams || []) as TeamWithRelations[],
+    initialFieldDefinitions: (fieldDefinitions || []).map(fd => ({
+      ...fd,
+      options: fd.options as FieldOption[] | null
+    })) as FieldDefinitionWithOptions[]
   }
   console.log('Passing to dashboard:', dashboardProps)
 

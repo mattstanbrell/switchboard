@@ -1,18 +1,19 @@
 'use client'
 
+import type { Database } from '@/database.types'
 import { useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Trash2 } from 'lucide-react'
 
+type Tables = Database['public']['Tables']
+type FocusArea = Tables['focus_areas']['Row']
+
 interface Props {
-  initialFocusAreas: Array<{
-    id: number
-    name: string
-  }>
+  initialFocusAreas: FocusArea[]
   companyId: string
-  onUpdate: (focusAreas: Array<{ id: number, name: string }>) => void
+  onUpdate: (focusAreas: FocusArea[]) => void
 }
 
 export function FocusAreaManager({ initialFocusAreas, companyId, onUpdate }: Props) {

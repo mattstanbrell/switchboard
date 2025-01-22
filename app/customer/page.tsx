@@ -1,5 +1,6 @@
 'use client'
 
+import type { Database } from '@/database.types'
 import { createClient } from '@/utils/supabase/client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -21,15 +22,12 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-type Ticket = {
-  id: number
-  subject: string
-  status: string
-  created_at: string
-}
+type Tables = Database['public']['Tables']
+type Ticket = Tables['tickets']['Row']
+type Profile = Tables['profiles']['Row']
 
 export default function CustomerPage() {
-  const [profile, setProfile] = useState<{ full_name: string } | null>(null)
+  const [profile, setProfile] = useState<Profile | null>(null)
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [open, setOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -49,7 +47,7 @@ export default function CustomerPage() {
       // Fetch profile
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('full_name')
+        .select('*')
         .eq('id', user.id)
         .single()
       
@@ -58,7 +56,7 @@ export default function CustomerPage() {
       // Fetch tickets
       const { data: ticketsData } = await supabase
         .from('tickets')
-        .select('id, subject, status, created_at')
+        .select('*')
         .order('created_at', { ascending: false })
       
       setTickets(ticketsData || [])

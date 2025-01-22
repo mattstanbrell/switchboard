@@ -1,11 +1,15 @@
+import type { Database } from '@/database.types'
 import { createClient } from '@/utils/supabase/server'
 import { NextResponse, type NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
 
-interface Profile {
-  id: string
-  role: 'admin' | 'human_agent' | 'customer'
-  company_id: string
+type Tables = Database['public']['Tables']
+type BaseProfile = Tables['profiles']['Row']
+
+type UserRole = 'admin' | 'human_agent' | 'customer'
+
+interface Profile extends Pick<BaseProfile, 'id' | 'company_id'> {
+  role: UserRole
 }
 
 // List of public routes that don't require authentication

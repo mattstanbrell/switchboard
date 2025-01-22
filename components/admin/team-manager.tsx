@@ -1,5 +1,6 @@
 'use client'
 
+import type { Database } from '@/database.types'
 import { useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { Button } from "@/components/ui/button"
@@ -9,24 +10,13 @@ import { Badge } from "@/components/ui/badge"
 import { Trash2, Users } from 'lucide-react'
 import { MultiSelect } from '@/components/ui/multi-select'
 
-interface FocusArea {
-  id: number
-  name: string
-}
+type Tables = Database['public']['Tables']
+type FocusArea = Tables['focus_areas']['Row']
+type Profile = Tables['profiles']['Row']
+type BaseTeam = Tables['teams']['Row']
 
-interface Agent {
-  id: string
-  full_name: string
-  team_id: number | null
-}
-
-interface Team {
-  id: number
-  name: string
-  profiles: Array<{
-    id: string
-    full_name: string
-  }>
+interface TeamWithRelations extends BaseTeam {
+  profiles: Array<Pick<Profile, 'id' | 'full_name'>>
   team_focus_areas: Array<{
     focus_area_id: number
   }>
@@ -35,10 +25,10 @@ interface Team {
 interface Props {
   companyId: string
   focusAreas: FocusArea[]
-  agents: Agent[]
-  initialTeams: Team[]
-  onTeamsChange: (teams: Team[]) => void
-  onAgentsChange: (agents: Agent[]) => void
+  agents: Profile[]
+  initialTeams: TeamWithRelations[]
+  onTeamsChange: (teams: TeamWithRelations[]) => void
+  onAgentsChange: (agents: Profile[]) => void
 }
 
 export function TeamManager({ 
@@ -57,7 +47,7 @@ export function TeamManager({
     teamsCount: initialTeams.length
   })
 
-  const [teams, setTeams] = useState<Team[]>(initialTeams)
+  const [teams, setTeams] = useState<TeamWithRelations[]>(initialTeams)
   const [newTeamName, setNewTeamName] = useState('')
   const [selectedFocusAreas, setSelectedFocusAreas] = useState<string[]>([])
   const [selectedAgents, setSelectedAgents] = useState<string[]>([])
@@ -159,12 +149,6 @@ export function TeamManager({
       const results = await Promise.all(assignmentPromises);
       const errors = results.filter(r => r.error).map(r => r.error);
 
-      console.log('Assignment results:', {
-        success: errors.length === 0,
-        errors,
-        results
-      });
-
       if (errors.length > 0) {
         throw new Error('Failed to assign some agents to team');
       }
@@ -175,6 +159,7 @@ export function TeamManager({
         .select(`
           id,
           name,
+          company_id,
           profiles (id, full_name),
           team_focus_areas (focus_area_id)
         `)
@@ -184,7 +169,7 @@ export function TeamManager({
       if (fetchError) throw fetchError
 
       // Update local state
-      const updatedTeams = [...teams, newTeam]
+      const updatedTeams = [...teams, newTeam as TeamWithRelations]
       setTeams(updatedTeams)
       onTeamsChange(updatedTeams)
 
@@ -297,7 +282,7 @@ export function TeamManager({
           <MultiSelect
             options={availableFocusAreas.map(area => ({
               value: area.id.toString(),
-              label: area.name
+              label: area.name || ''
             }))}
             selected={selectedFocusAreas || []}
             onChange={handleFocusAreasChange}
@@ -310,7 +295,7 @@ export function TeamManager({
           <MultiSelect
             options={availableAgents.map(agent => ({
               value: agent.id,
-              label: agent.full_name
+              label: agent.full_name || ''
             }))}
             selected={selectedAgents || []}
             onChange={handleAgentsChange}
