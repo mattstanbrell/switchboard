@@ -29,7 +29,7 @@ interface Team {
   name: string
   team_focus_areas: Array<{
     focus_area_id: number
-    focus_areas: FocusArea[]
+    focus_areas: FocusArea
   }>
 }
 
@@ -37,7 +37,7 @@ interface Profile {
   id: string
   full_name: string
   team_id: number
-  teams: Team[]
+  teams: Team
 }
 
 interface Props {
@@ -46,8 +46,8 @@ interface Props {
 }
 
 export function HumanAgentDashboard({ profile, tickets }: Props) {
-  const team = profile.teams[0]
-  const focusAreas = team?.team_focus_areas.flatMap(tfa => tfa.focus_areas) || []
+  const team = profile.teams
+  const focusAreas = team?.team_focus_areas.map(tfa => tfa.focus_areas) || []
 
   return (
     <div className="space-y-6">
