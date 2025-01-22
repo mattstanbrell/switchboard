@@ -1,6 +1,12 @@
 import { createClient } from '@/utils/supabase/server'
 import { NextResponse } from 'next/server'
 
+interface AdminSignupMetadata {
+  full_name: string
+  company_name: string
+  role: 'admin'
+}
+
 export async function POST(request: Request) {
   const requestUrl = new URL(request.url)
   const formData = await request.formData()
@@ -46,7 +52,7 @@ export async function POST(request: Request) {
         full_name,
         company_name,
         role,
-      },
+      } as AdminSignupMetadata,
       emailRedirectTo: `${requestUrl.origin}/auth/callback`,
     },
   })

@@ -2,10 +2,17 @@ import { createClient } from '@/utils/supabase/server'
 import { supabaseService } from '@/utils/supabase/service'
 import { NextResponse } from 'next/server'
 
+interface AgentRegistrationRequest {
+  email: string
+  password: string
+  fullName: string
+  companyId: string
+}
+
 export async function POST(request: Request) {
   try {
     const json = await request.json()
-    const { email, password, fullName, companyId } = json
+    const { email, password, fullName, companyId } = json as AgentRegistrationRequest
 
     const supabase = await createClient()
 

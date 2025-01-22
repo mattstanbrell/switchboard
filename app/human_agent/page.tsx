@@ -1,7 +1,53 @@
-import type { FocusArea, Ticket, Team } from '@/components/human-agent/dashboard'
+import type { Database } from '@/database.types'
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { HumanAgentDashboard } from '@/components/human-agent/dashboard'
+
+type Tables = Database['public']['Tables']
+type Profile = Tables['profiles']['Row']
+type Team = Tables['teams']['Row']
+type FocusArea = Tables['focus_areas']['Row']
+type Ticket = Tables['tickets']['Row'] & {
+  focus_areas: FocusArea
+}
+
+interface TeamWithRelations extends Team {
+  team_focus_areas: Array<{
+    focus_area_id: number
+    focus_areas: FocusArea
+  }>
+}
+
+interface ProfileWithTeam extends Profile {
+  teams: TeamWithRelations
+}
+
+interface RawProfile {
+  id: string
+  full_name: string | null
+  team_id: number | null
+  teams: {
+    id: number
+    name: string
+    company_id: string
+    team_focus_areas: Array<{
+      focus_area_id: number
+      focus_areas: FocusArea
+    }>
+  }
+}
+
+interface RawTicket {
+  id: number
+  subject: string
+  status: string
+  created_at: string
+  focus_area_id: number | null
+  customer_id: string
+  human_agent_id: string | null
+  team_id: number | null
+  focus_areas: FocusArea
+}
 
 export default async function HumanAgentPage() {
   const supabase = await createClient()
@@ -22,11 +68,13 @@ export default async function HumanAgentPage() {
       teams!inner (
         id,
         name,
+        company_id,
         team_focus_areas!inner (
           focus_area_id,
           focus_areas!inner (
             id,
-            name
+            name,
+            company_id
           )
         )
       )
@@ -47,11 +95,21 @@ export default async function HumanAgentPage() {
     throw profileError
   }
 
+  const typedProfile = profile as unknown as RawProfile
+  const profileWithTeam: ProfileWithTeam = {
+    ...typedProfile,
+    avatar_url: null,
+    company_id: typedProfile.teams.company_id,
+    last_seen: null,
+    role: 'human_agent',
+    teams: typedProfile.teams
+  }
+
   // Debug team data
   console.log('Team data:', {
-    teamId: profile?.team_id,
-    team: profile?.teams,
-    focusAreas: ((profile?.teams as unknown) as Team)?.team_focus_areas?.map((tfa: { focus_area_id: number; focus_areas: FocusArea }) => ({
+    teamId: profileWithTeam?.team_id,
+    team: profileWithTeam?.teams,
+    focusAreas: ((profileWithTeam?.teams as unknown) as TeamWithRelations)?.team_focus_areas?.map((tfa: { focus_area_id: number; focus_areas: FocusArea }) => ({
       focusAreaId: tfa.focus_area_id,
       focusArea: tfa.focus_areas
     }))
@@ -59,7 +117,7 @@ export default async function HumanAgentPage() {
 
   // Only fetch tickets if the agent is assigned to a team
   let tickets: Ticket[] = []
-  if (profile?.team_id) {
+  if (profileWithTeam?.team_id) {
     const { data: ticketsData, error: ticketsError } = await supabase
       .from('tickets')
       .select(`
@@ -68,12 +126,16 @@ export default async function HumanAgentPage() {
         status,
         created_at,
         focus_area_id,
-        focus_areas (
+        customer_id,
+        human_agent_id,
+        team_id,
+        focus_areas!inner (
           id,
-          name
+          name,
+          company_id
         )
       `)
-      .eq('team_id', profile.team_id)
+      .eq('team_id', profileWithTeam.team_id)
       .order('created_at', { ascending: false })
 
     console.log('=== TICKETS DATA ===')
@@ -89,22 +151,20 @@ export default async function HumanAgentPage() {
       throw ticketsError
     }
 
-    tickets = (ticketsData as unknown as Ticket[]) || []
+    tickets = (ticketsData as unknown as RawTicket[]).map(ticket => ({
+      ...ticket,
+      focus_areas: ticket.focus_areas
+    }))
   }
 
   return (
     <div className="min-h-screen p-8">
       <h1 className="text-4xl font-bold mb-4">Human Agent Dashboard</h1>
-      <p className="text-xl mb-8">Hello, {profile?.full_name}</p>
+      <p className="text-xl mb-8">Hello, {profileWithTeam?.full_name}</p>
       
-      {profile?.team_id ? (
+      {profileWithTeam?.team_id ? (
         <HumanAgentDashboard 
-          profile={{
-            id: profile.id,
-            full_name: profile.full_name,
-            team_id: profile.team_id,
-            teams: (profile.teams as unknown) as Team
-          }}
+          profile={profileWithTeam}
           tickets={tickets}
         />
       ) : (
