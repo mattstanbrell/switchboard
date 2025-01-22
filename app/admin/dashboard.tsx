@@ -57,7 +57,7 @@ export default function AdminDashboard({
           table: 'profiles',
           filter: `company_id=eq.${initialProfile.company_id}`
         },
-        async (payload) => {
+        async () => {
           // Fetch the updated list of agents
           const { data: updatedAgents } = await supabase
             .from('profiles')

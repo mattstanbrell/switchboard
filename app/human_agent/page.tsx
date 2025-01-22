@@ -1,18 +1,7 @@
+import type { FocusArea, Ticket, Team, Profile } from '@/components/human-agent/dashboard'
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { HumanAgentDashboard } from '@/components/human-agent/dashboard'
-
-interface Ticket {
-  id: number
-  subject: string
-  status: string
-  created_at: string
-  focus_area_id: number
-  focus_areas: Array<{
-    id: number
-    name: string
-  }>
-}
 
 export default async function HumanAgentPage() {
   const supabase = await createClient()
@@ -22,7 +11,6 @@ export default async function HumanAgentPage() {
     console.error('Auth error:', userError)
     redirect('/')
   }
-  console.log('Authenticated user:', { id: user.id, email: user.email })
 
   // Get agent's profile including team_id
   const { data: profile, error: profileError } = await supabase
@@ -46,12 +34,13 @@ export default async function HumanAgentPage() {
     .eq('id', user.id)
     .single()
 
-  console.log('Profile query result:', {
+  console.log('=== PROFILE DATA ===')
+  console.log(JSON.stringify({
     profile,
     error: profileError?.message,
     details: profileError?.details,
     hint: profileError?.hint
-  })
+  }, null, 2))
 
   if (profileError) {
     console.error('Profile fetch error:', profileError)
@@ -61,10 +50,10 @@ export default async function HumanAgentPage() {
   // Debug team data
   console.log('Team data:', {
     teamId: profile?.team_id,
-    team: profile?.teams?.[0],
-    focusAreas: profile?.teams?.[0]?.team_focus_areas?.map(tfa => ({
+    team: profile?.teams,
+    focusAreas: ((profile?.teams as unknown) as Team)?.team_focus_areas?.map((tfa: { focus_area_id: number; focus_areas: FocusArea }) => ({
       focusAreaId: tfa.focus_area_id,
-      focusArea: tfa.focus_areas?.[0]
+      focusArea: tfa.focus_areas
     }))
   })
 
@@ -87,19 +76,20 @@ export default async function HumanAgentPage() {
       .eq('team_id', profile.team_id)
       .order('created_at', { ascending: false })
 
-    console.log('Tickets query result:', {
-      ticketsCount: ticketsData?.length,
+    console.log('=== TICKETS DATA ===')
+    console.log(JSON.stringify({
+      ticketsData,
       error: ticketsError?.message,
       details: ticketsError?.details,
       hint: ticketsError?.hint
-    })
+    }, null, 2))
 
     if (ticketsError) {
       console.error('Tickets fetch error:', ticketsError)
       throw ticketsError
     }
 
-    tickets = (ticketsData as Ticket[]) || []
+    tickets = (ticketsData as unknown as Ticket[]) || []
   }
 
   return (
@@ -109,7 +99,12 @@ export default async function HumanAgentPage() {
       
       {profile?.team_id ? (
         <HumanAgentDashboard 
-          profile={profile}
+          profile={{
+            id: profile.id,
+            full_name: profile.full_name,
+            team_id: profile.team_id,
+            teams: (profile.teams as unknown) as Team
+          }}
           tickets={tickets}
         />
       ) : (
