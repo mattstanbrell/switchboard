@@ -10,21 +10,21 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 
-interface FocusArea {
+export interface FocusArea {
   id: number
   name: string
 }
 
-interface Ticket {
+export interface Ticket {
   id: number
   subject: string
   status: string
   created_at: string
   focus_area_id: number
-  focus_areas: Array<FocusArea>
+  focus_areas: FocusArea
 }
 
-interface Team {
+export interface Team {
   id: number
   name: string
   team_focus_areas: Array<{
@@ -33,7 +33,7 @@ interface Team {
   }>
 }
 
-interface Profile {
+export interface Profile {
   id: string
   full_name: string
   team_id: number
@@ -87,7 +87,7 @@ export function HumanAgentDashboard({ profile, tickets }: Props) {
                     <TableCell>{ticket.subject}</TableCell>
                     <TableCell>
                       <Badge variant="secondary">
-                        {ticket.focus_areas[0]?.name}
+                        {ticket.focus_areas.name}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -96,7 +96,7 @@ export function HumanAgentDashboard({ profile, tickets }: Props) {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {new Date(ticket.created_at).toLocaleDateString()}
+                      {new Date(ticket.created_at).toISOString().split('T')[0]}
                     </TableCell>
                   </TableRow>
                 ))
