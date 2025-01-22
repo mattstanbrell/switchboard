@@ -1,4 +1,4 @@
-import type { FocusArea, Ticket, Team, Profile } from '@/components/human-agent/dashboard'
+import type { FocusArea, Ticket, Team } from '@/components/human-agent/dashboard'
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { HumanAgentDashboard } from '@/components/human-agent/dashboard'
