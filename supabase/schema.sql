@@ -10,6 +10,8 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
+CREATE EXTENSION IF NOT EXISTS "pg_cron" WITH SCHEMA "pg_catalog";
+
 CREATE EXTENSION IF NOT EXISTS "pgsodium" WITH SCHEMA "pgsodium";
 
 COMMENT ON SCHEMA "public" IS 'standard public schema';
@@ -25,6 +27,13 @@ CREATE EXTENSION IF NOT EXISTS "pgjwt" WITH SCHEMA "extensions";
 CREATE EXTENSION IF NOT EXISTS "supabase_vault" WITH SCHEMA "vault";
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
+
+CREATE TYPE "public"."message_type" AS ENUM (
+    'user',
+    'system'
+);
+
+ALTER TYPE "public"."message_type" OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."assign_agent_to_team"("agent_id" "uuid", "team_id" bigint, "admin_id" "uuid") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -78,6 +87,99 @@ $$;
 
 ALTER FUNCTION "public"."assign_ticket_to_team"() OWNER TO "postgres";
 
+CREATE OR REPLACE FUNCTION "public"."close_resolved_ticket"("ticket_id_param" bigint, "agent_id_param" "uuid", "job_name" "text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  last_message_time timestamptz;
+  resolved_time timestamptz;
+  ticket_exists boolean;
+BEGIN
+  RAISE LOG '=== STARTING CLOSE_RESOLVED_TICKET ===';
+  RAISE LOG 'Parameters received - ticket_id: %, agent_id: %, job_name: %', ticket_id_param, agent_id_param, job_name;
+
+  -- Check if ticket exists
+  SELECT EXISTS (
+    SELECT 1 FROM tickets WHERE id = ticket_id_param
+  ) INTO ticket_exists;
+  
+  RAISE LOG 'Ticket exists: %', ticket_exists;
+
+  IF NOT ticket_exists THEN
+    RAISE WARNING 'ERROR: Ticket with ID % not found', ticket_id_param;
+    RETURN;
+  END IF;
+
+  -- Get the resolved time and last message time, EXCLUDING system messages
+  SELECT resolved_at, COALESCE(
+    (SELECT created_at 
+     FROM messages 
+     WHERE ticket_id = ticket_id_param 
+     AND type = 'user'  -- Only consider user messages, not system messages
+     ORDER BY created_at DESC 
+     LIMIT 1),
+    resolved_at
+  )
+  INTO resolved_time, last_message_time
+  FROM tickets
+  WHERE id = ticket_id_param;
+
+  RAISE LOG 'Times retrieved - resolved_time: %, last_message_time: % (excluding system messages)', resolved_time, last_message_time;
+
+  -- If no new user messages since being resolved, close the ticket
+  IF last_message_time <= resolved_time THEN
+    RAISE LOG 'No new user messages found since resolution, proceeding to close ticket';
+    
+    BEGIN
+      -- Update ticket status
+      UPDATE tickets 
+      SET status = 'closed',
+          closed_at = NOW()
+      WHERE id = ticket_id_param;
+      
+      RAISE LOG 'Ticket status updated to closed';
+
+      -- Add system message
+      INSERT INTO messages (
+        ticket_id,
+        content,
+        sender_id,
+        type
+      ) VALUES (
+        ticket_id_param,
+        'Ticket automatically closed due to no response',
+        agent_id_param,
+        'system'
+      );
+
+      RAISE LOG 'System message inserted successfully';
+    EXCEPTION
+      WHEN OTHERS THEN
+        RAISE WARNING 'Error occurred during update/insert: %, %', SQLERRM, SQLSTATE;
+        RAISE;
+    END;
+  ELSE
+    RAISE LOG 'New user messages found since resolution, ticket will not be closed';
+    RAISE LOG 'Last user message time (%) is after resolved time (%)', last_message_time, resolved_time;
+  END IF;
+
+  BEGIN
+    -- Unschedule the job after execution
+    PERFORM cron.unschedule(job_name);
+    RAISE LOG 'Successfully unscheduled job: %', job_name;
+  EXCEPTION
+    WHEN OTHERS THEN
+      RAISE WARNING 'Error unscheduling job: %, %', SQLERRM, SQLSTATE;
+      RAISE;
+  END;
+
+  RAISE LOG '=== FINISHED CLOSE_RESOLVED_TICKET ===';
+END;
+$$;
+
+ALTER FUNCTION "public"."close_resolved_ticket"("ticket_id_param" bigint, "agent_id_param" "uuid", "job_name" "text") OWNER TO "postgres";
+
 CREATE OR REPLACE FUNCTION "public"."get_companies"() RETURNS TABLE("id" "uuid", "name" "text")
     LANGUAGE "sql" SECURITY DEFINER
     AS $$
@@ -129,6 +231,45 @@ END;
 $$;
 
 ALTER FUNCTION "public"."get_profile"("user_id" "uuid") OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "public"."get_user_company_id"() RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+  my_company_id uuid;
+BEGIN
+  -- Temporarily disable RLS so we can read from profiles directly.
+  SET LOCAL row_security = off;
+
+  SELECT company_id
+    INTO my_company_id
+    FROM public.profiles
+   WHERE id = auth.uid();
+
+  RETURN my_company_id;
+END;
+$$;
+
+ALTER FUNCTION "public"."get_user_company_id"() OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "public"."get_user_role"() RETURNS "text"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+  my_role text;
+BEGIN
+  SET LOCAL row_security = off;
+
+  SELECT role
+    INTO my_role
+    FROM public.profiles
+   WHERE id = auth.uid();
+
+  RETURN my_role;
+END;
+$$;
+
+ALTER FUNCTION "public"."get_user_role"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -191,6 +332,76 @@ $$;
 
 ALTER FUNCTION "public"."handle_new_user"() OWNER TO "postgres";
 
+CREATE OR REPLACE FUNCTION "public"."schedule_auto_close"("job_name" "text", "ticket_id" bigint, "agent_id" "uuid", "minutes_until_close" integer) RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  cron_schedule text;
+  sql_command text;
+  target_time timestamptz;
+BEGIN
+  RAISE LOG '=== STARTING SCHEDULE_AUTO_CLOSE ===';
+  RAISE LOG 'Parameters received - job_name: %, ticket_id: %, agent_id: %, minutes_until_close: %', 
+               job_name, ticket_id, agent_id, minutes_until_close;
+
+  -- Calculate the target time
+  target_time := now() + (minutes_until_close || ' minutes')::interval;
+  
+  -- Extract minute and hour for the cron schedule
+  cron_schedule := format(
+    '%s %s %s %s *',
+    date_part('minute', target_time)::integer,
+    date_part('hour', target_time)::integer,
+    date_part('day', target_time)::integer,
+    date_part('month', target_time)::integer
+  );
+  
+  RAISE LOG 'Current time: %', now();
+  RAISE LOG 'Target time: %', target_time;
+  RAISE LOG 'Calculated cron schedule: %', cron_schedule;
+
+  -- Prepare SQL command
+  sql_command := format(
+    'SELECT close_resolved_ticket(%s, %L::uuid, %L);',
+    ticket_id, 
+    agent_id, 
+    job_name
+  );
+  
+  RAISE LOG 'Prepared SQL command: %', sql_command;
+
+  BEGIN
+    -- Schedule the job
+    PERFORM cron.schedule(
+      job_name,
+      cron_schedule,
+      sql_command
+    );
+    RAISE LOG 'Successfully scheduled cron job';
+  EXCEPTION
+    WHEN OTHERS THEN
+      RAISE WARNING 'Error scheduling cron job: %, %', SQLERRM, SQLSTATE;
+      RAISE;
+  END;
+
+  RAISE LOG '=== FINISHED SCHEDULE_AUTO_CLOSE ===';
+END;
+$$;
+
+ALTER FUNCTION "public"."schedule_auto_close"("job_name" "text", "ticket_id" bigint, "agent_id" "uuid", "minutes_until_close" integer) OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "public"."unschedule_job"("job_name" "text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  PERFORM cron.unschedule(job_name);
+END;
+$$;
+
+ALTER FUNCTION "public"."unschedule_job"("job_name" "text") OWNER TO "postgres";
+
 CREATE TABLE IF NOT EXISTS "public"."companies" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "name" "text" NOT NULL
@@ -241,6 +452,28 @@ ALTER TABLE "public"."focus_areas_id_seq" OWNER TO "postgres";
 
 ALTER SEQUENCE "public"."focus_areas_id_seq" OWNED BY "public"."focus_areas"."id";
 
+CREATE TABLE IF NOT EXISTS "public"."messages" (
+    "id" bigint NOT NULL,
+    "ticket_id" bigint NOT NULL,
+    "sender_id" "uuid" NOT NULL,
+    "content" "text" NOT NULL,
+    "created_at" timestamp without time zone DEFAULT "now"() NOT NULL,
+    "type" "public"."message_type" DEFAULT 'user'::"public"."message_type" NOT NULL
+);
+
+ALTER TABLE "public"."messages" OWNER TO "postgres";
+
+CREATE SEQUENCE IF NOT EXISTS "public"."messages_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+ALTER TABLE "public"."messages_id_seq" OWNER TO "postgres";
+
+ALTER SEQUENCE "public"."messages_id_seq" OWNED BY "public"."messages"."id";
+
 CREATE TABLE IF NOT EXISTS "public"."team_focus_areas" (
     "team_id" bigint NOT NULL,
     "focus_area_id" bigint NOT NULL
@@ -283,7 +516,9 @@ CREATE TABLE IF NOT EXISTS "public"."tickets" (
     "customer_id" "uuid" NOT NULL,
     "human_agent_id" "uuid",
     "team_id" bigint,
-    "focus_area_id" bigint
+    "focus_area_id" bigint,
+    "resolved_at" timestamp without time zone,
+    "closed_at" timestamp without time zone
 );
 
 ALTER TABLE "public"."tickets" OWNER TO "postgres";
@@ -303,6 +538,8 @@ ALTER TABLE ONLY "public"."field_definitions" ALTER COLUMN "id" SET DEFAULT "nex
 
 ALTER TABLE ONLY "public"."focus_areas" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."focus_areas_id_seq"'::"regclass");
 
+ALTER TABLE ONLY "public"."messages" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."messages_id_seq"'::"regclass");
+
 ALTER TABLE ONLY "public"."teams" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."teams_id_seq"'::"regclass");
 
 ALTER TABLE ONLY "public"."tickets" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."tickets_id_seq"'::"regclass");
@@ -315,6 +552,9 @@ ALTER TABLE ONLY "public"."field_definitions"
 
 ALTER TABLE ONLY "public"."focus_areas"
     ADD CONSTRAINT "focus_areas_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."messages"
+    ADD CONSTRAINT "messages_pkey" PRIMARY KEY ("id");
 
 ALTER TABLE ONLY "public"."profiles"
     ADD CONSTRAINT "profiles_pkey" PRIMARY KEY ("id");
@@ -338,6 +578,12 @@ ALTER TABLE ONLY "public"."field_definitions"
 
 ALTER TABLE ONLY "public"."focus_areas"
     ADD CONSTRAINT "focus_areas_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id");
+
+ALTER TABLE ONLY "public"."messages"
+    ADD CONSTRAINT "messages_sender_id_fkey" FOREIGN KEY ("sender_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."messages"
+    ADD CONSTRAINT "messages_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
 
 ALTER TABLE ONLY "public"."profiles"
     ADD CONSTRAINT "profiles_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id");
@@ -431,6 +677,8 @@ CREATE POLICY "allow_select_companies" ON "public"."companies" FOR SELECT TO "au
 
 ALTER TABLE "public"."companies" ENABLE ROW LEVEL SECURITY;
 
+CREATE POLICY "customers_can_view_company_agents" ON "public"."profiles" FOR SELECT TO "authenticated" USING ((("public"."get_user_role"() = 'customer'::"text") AND ("public"."get_user_company_id"() = "company_id") AND ("role" = 'human_agent'::"text")));
+
 CREATE POLICY "customers_can_view_own_tickets" ON "public"."tickets" FOR SELECT TO "authenticated" USING ((("customer_id" = "auth"."uid"()) OR ("human_agent_id" = "auth"."uid"()) OR ("team_id" IN ( SELECT "profiles"."team_id"
    FROM "public"."profiles"
   WHERE ("profiles"."id" = "auth"."uid"())))));
@@ -438,6 +686,16 @@ CREATE POLICY "customers_can_view_own_tickets" ON "public"."tickets" FOR SELECT 
 ALTER TABLE "public"."field_definitions" ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE "public"."focus_areas" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "human_agents_can_update_tickets" ON "public"."tickets" FOR UPDATE TO "authenticated" USING (("auth"."uid"() IN ( SELECT "p"."id"
+   FROM "public"."profiles" "p"
+  WHERE (("p"."id" = "auth"."uid"()) AND ("p"."role" = 'human_agent'::"text"))))) WITH CHECK (("auth"."uid"() IN ( SELECT "p"."id"
+   FROM "public"."profiles" "p"
+  WHERE (("p"."id" = "auth"."uid"()) AND ("p"."role" = 'human_agent'::"text")))));
+
+CREATE POLICY "human_agents_can_view_customer_profiles" ON "public"."profiles" FOR SELECT TO "authenticated" USING ((("role" = 'customer'::"text") AND ("public"."get_user_role"() = 'human_agent'::"text") AND ("public"."get_user_company_id"() = "company_id")));
+
+ALTER TABLE "public"."messages" ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE "public"."profiles" ENABLE ROW LEVEL SECURITY;
 
@@ -452,6 +710,12 @@ ALTER TABLE "public"."tickets" ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "users_can_create_tickets" ON "public"."tickets" FOR INSERT TO "authenticated" WITH CHECK ((("customer_id" = "auth"."uid"()) AND (("focus_area_id" IS NULL) OR ("focus_area_id" IN ( SELECT "focus_areas"."id"
    FROM "public"."focus_areas"
   WHERE ("focus_areas"."company_id" = ( SELECT "profiles"."company_id"
+           FROM "public"."profiles"
+          WHERE ("profiles"."id" = "auth"."uid"()))))))));
+
+CREATE POLICY "users_can_insert_messages" ON "public"."messages" FOR INSERT TO "authenticated" WITH CHECK ((EXISTS ( SELECT 1
+   FROM "public"."tickets"
+  WHERE (("tickets"."id" = "messages"."ticket_id") AND (("tickets"."customer_id" = "auth"."uid"()) OR ("tickets"."human_agent_id" = "auth"."uid"()) OR ("tickets"."team_id" IN ( SELECT "profiles"."team_id"
            FROM "public"."profiles"
           WHERE ("profiles"."id" = "auth"."uid"()))))))));
 
@@ -491,6 +755,12 @@ CREATE POLICY "users_can_view_own_company" ON "public"."companies" FOR SELECT TO
 
 CREATE POLICY "users_can_view_own_profile" ON "public"."profiles" FOR SELECT TO "authenticated" USING (("id" = "auth"."uid"()));
 
+CREATE POLICY "users_can_view_relevant_messages" ON "public"."messages" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM "public"."tickets"
+  WHERE (("tickets"."id" = "messages"."ticket_id") AND (("tickets"."customer_id" = "auth"."uid"()) OR ("tickets"."human_agent_id" = "auth"."uid"()) OR ("tickets"."team_id" IN ( SELECT "profiles"."team_id"
+           FROM "public"."profiles"
+          WHERE ("profiles"."id" = "auth"."uid"()))))))));
+
 CREATE POLICY "users_can_view_relevant_tickets" ON "public"."tickets" FOR SELECT TO "authenticated" USING ((("customer_id" = "auth"."uid"()) OR ("human_agent_id" = "auth"."uid"()) OR (("focus_area_id" IS NULL) AND (EXISTS ( SELECT 1
    FROM "public"."profiles"
   WHERE (("profiles"."id" = "auth"."uid"()) AND ("profiles"."role" = 'human_agent'::"text") AND ("profiles"."company_id" = ( SELECT "profiles_1"."company_id"
@@ -515,7 +785,13 @@ ALTER PUBLICATION "realtime_messages_publication_v2_34_1" OWNER TO "supabase_adm
 
 ALTER PUBLICATION "supabase_realtime" OWNER TO "postgres";
 
+CREATE PUBLICATION "supabase_realtime_messages_publication_v2_34_6" WITH (publish = 'insert, update, delete, truncate');
+
+ALTER PUBLICATION "supabase_realtime_messages_publication_v2_34_6" OWNER TO "supabase_admin";
+
 ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."focus_areas";
+
+ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."messages";
 
 ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."profiles";
 
@@ -532,6 +808,10 @@ GRANT ALL ON FUNCTION "public"."assign_ticket_to_team"() TO "anon";
 GRANT ALL ON FUNCTION "public"."assign_ticket_to_team"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."assign_ticket_to_team"() TO "service_role";
 
+GRANT ALL ON FUNCTION "public"."close_resolved_ticket"("ticket_id_param" bigint, "agent_id_param" "uuid", "job_name" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."close_resolved_ticket"("ticket_id_param" bigint, "agent_id_param" "uuid", "job_name" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."close_resolved_ticket"("ticket_id_param" bigint, "agent_id_param" "uuid", "job_name" "text") TO "service_role";
+
 GRANT ALL ON FUNCTION "public"."get_companies"() TO "anon";
 GRANT ALL ON FUNCTION "public"."get_companies"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_companies"() TO "service_role";
@@ -539,6 +819,8 @@ GRANT ALL ON FUNCTION "public"."get_companies"() TO "service_role";
 GRANT ALL ON TABLE "public"."profiles" TO "anon";
 GRANT ALL ON TABLE "public"."profiles" TO "authenticated";
 GRANT ALL ON TABLE "public"."profiles" TO "service_role";
+
+GRANT SELECT("full_name") ON TABLE "public"."profiles" TO "authenticated";
 
 GRANT ALL ON FUNCTION "public"."get_company_profiles"("company_id_input" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."get_company_profiles"("company_id_input" "uuid") TO "authenticated";
@@ -548,9 +830,25 @@ GRANT ALL ON FUNCTION "public"."get_profile"("user_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."get_profile"("user_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_profile"("user_id" "uuid") TO "service_role";
 
+GRANT ALL ON FUNCTION "public"."get_user_company_id"() TO "anon";
+GRANT ALL ON FUNCTION "public"."get_user_company_id"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_user_company_id"() TO "service_role";
+
+GRANT ALL ON FUNCTION "public"."get_user_role"() TO "anon";
+GRANT ALL ON FUNCTION "public"."get_user_role"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_user_role"() TO "service_role";
+
 GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "anon";
 GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "service_role";
+
+GRANT ALL ON FUNCTION "public"."schedule_auto_close"("job_name" "text", "ticket_id" bigint, "agent_id" "uuid", "minutes_until_close" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."schedule_auto_close"("job_name" "text", "ticket_id" bigint, "agent_id" "uuid", "minutes_until_close" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."schedule_auto_close"("job_name" "text", "ticket_id" bigint, "agent_id" "uuid", "minutes_until_close" integer) TO "service_role";
+
+GRANT ALL ON FUNCTION "public"."unschedule_job"("job_name" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."unschedule_job"("job_name" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."unschedule_job"("job_name" "text") TO "service_role";
 
 GRANT ALL ON TABLE "public"."companies" TO "anon";
 GRANT ALL ON TABLE "public"."companies" TO "authenticated";
@@ -571,6 +869,14 @@ GRANT ALL ON TABLE "public"."focus_areas" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."focus_areas_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."focus_areas_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."focus_areas_id_seq" TO "service_role";
+
+GRANT ALL ON TABLE "public"."messages" TO "anon";
+GRANT ALL ON TABLE "public"."messages" TO "authenticated";
+GRANT ALL ON TABLE "public"."messages" TO "service_role";
+
+GRANT ALL ON SEQUENCE "public"."messages_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."messages_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."messages_id_seq" TO "service_role";
 
 GRANT ALL ON TABLE "public"."team_focus_areas" TO "anon";
 GRANT ALL ON TABLE "public"."team_focus_areas" TO "authenticated";

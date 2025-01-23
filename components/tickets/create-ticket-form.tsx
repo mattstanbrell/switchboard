@@ -123,6 +123,41 @@ export default function CreateTicketForm({ onSuccess }: { onSuccess?: () => void
 
           if (fieldsError) throw fieldsError
         }
+
+        // Create initial message with all field values
+        let messageContent = `Ticket created with subject: ${subject}\n\n`
+        
+        // Add field values to message
+        const fieldMessages = fieldEntries.map(entry => {
+          const field = customFields.find(f => f.id === entry.field_definition_id)
+          if (!field) return null
+
+          let valueStr: string
+          if (field.allows_multiple) {
+            const values = JSON.parse(entry.value) as string[]
+            valueStr = values.join(', ')
+          } else {
+            valueStr = entry.value
+          }
+
+          return `${field.label}: ${valueStr}`
+        }).filter(Boolean)
+
+        if (fieldMessages.length > 0) {
+          messageContent += 'Additional Information:\n'
+          messageContent += fieldMessages.join('\n')
+        }
+
+        // Insert the initial message
+        const { error: messageError } = await supabase
+          .from('messages')
+          .insert({
+            ticket_id: ticket.id,
+            sender_id: user.id,
+            content: messageContent
+          })
+
+        if (messageError) throw messageError
       }
 
       // Reset form and notify parent

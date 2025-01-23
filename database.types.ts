@@ -91,6 +91,48 @@ export type Database = {
           },
         ]
       }
+      messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: number
+          sender_id: string
+          ticket_id: number
+          type: Database["public"]["Enums"]["message_type"]
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: number
+          sender_id: string
+          ticket_id: number
+          type?: Database["public"]["Enums"]["message_type"]
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: number
+          sender_id?: string
+          ticket_id?: number
+          type?: Database["public"]["Enums"]["message_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -227,31 +269,37 @@ export type Database = {
       }
       tickets: {
         Row: {
+          closed_at: string | null
           created_at: string
           customer_id: string
           focus_area_id: number | null
           human_agent_id: string | null
           id: number
+          resolved_at: string | null
           status: string
           subject: string
           team_id: number | null
         }
         Insert: {
+          closed_at?: string | null
           created_at?: string
           customer_id: string
           focus_area_id?: number | null
           human_agent_id?: string | null
           id?: number
+          resolved_at?: string | null
           status?: string
           subject: string
           team_id?: number | null
         }
         Update: {
+          closed_at?: string | null
           created_at?: string
           customer_id?: string
           focus_area_id?: number | null
           human_agent_id?: string | null
           id?: number
+          resolved_at?: string | null
           status?: string
           subject?: string
           team_id?: number | null
@@ -300,6 +348,14 @@ export type Database = {
         }
         Returns: undefined
       }
+      close_resolved_ticket: {
+        Args: {
+          ticket_id_param: number
+          agent_id_param: string
+          job_name: string
+        }
+        Returns: undefined
+      }
       get_companies: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -331,9 +387,32 @@ export type Database = {
           company_id: string
         }[]
       }
+      get_user_company_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      get_user_role: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      schedule_auto_close: {
+        Args: {
+          job_name: string
+          ticket_id: number
+          agent_id: string
+          minutes_until_close: number
+        }
+        Returns: undefined
+      }
+      unschedule_job: {
+        Args: {
+          job_name: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
-      [_ in never]: never
+      message_type: "user" | "system"
     }
     CompositeTypes: {
       [_ in never]: never

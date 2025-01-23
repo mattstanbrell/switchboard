@@ -158,10 +158,7 @@ export default async function HumanAgentPage() {
   }
 
   return (
-    <div className="min-h-screen p-8">
-      <h1 className="text-4xl font-bold mb-4">Human Agent Dashboard</h1>
-      <p className="text-xl mb-8">Hello, {profileWithTeam?.full_name}</p>
-      
+    <div className="min-h-screen">
       {profileWithTeam?.team_id ? (
         <HumanAgentDashboard 
           profile={profileWithTeam}
