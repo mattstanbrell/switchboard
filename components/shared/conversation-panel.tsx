@@ -10,6 +10,8 @@ import { X, Send } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { RealtimeChannel } from '@supabase/supabase-js'
+import { InternalNotesPanel } from "@/components/human-agent/internal-notes-panel"
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 
 type Tables = Database['public']['Tables']
 type Message = Tables['messages']['Row'] & {
@@ -19,10 +21,12 @@ type Message = Tables['messages']['Row'] & {
 }
 type Ticket = Tables['tickets']['Row']
 
+type ConversationVariant = 'customer' | 'agent'
+
 interface Props {
   ticket: Ticket
   onClose: () => void
-  variant: 'customer' | 'agent'
+  variant: ConversationVariant
   onOpenTicket?: () => void
   onResolveTicket?: () => void
   onCloseTicket?: () => void
@@ -46,6 +50,7 @@ export function ConversationPanel({
   const [otherPartyName, setOtherPartyName] = useState<string>('Unknown')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const channelRef = useRef<RealtimeChannel | null>(null)
+  const [showInternalNotes, setShowInternalNotes] = useState(false)
 
   useEffect(() => {
     setTicket(initialTicket)
@@ -216,6 +221,12 @@ export function ConversationPanel({
             Close
           </Button>
         )}
+        <Button
+          variant="outline"
+          onClick={() => setShowInternalNotes(true)}
+        >
+          Internal Notes
+        </Button>
       </div>
     )
   }
@@ -244,88 +255,189 @@ export function ConversationPanel({
         </div>
       </header>
 
-      <div className="flex-1 min-h-0 flex flex-col">
-        <ScrollArea className="flex-1">
-          <div className="p-6 space-y-6">
-            {isLoading ? (
-              <div className="text-center text-custom-text-secondary">Loading messages...</div>
-            ) : messages.length === 0 ? (
-              <div className="text-center text-custom-text-secondary">No messages yet</div>
-            ) : (
-              messages.map((message) => {
-                const isMyMessage = message.sender_id === currentUserId
-                const isSystemMessage = message.type === 'system'
+      <div className="flex-1 min-h-0 flex">
+        {variant === 'agent' && showInternalNotes ? (
+          <ResizablePanelGroup direction="horizontal">
+            <ResizablePanel defaultSize={60} minSize={30}>
+              <div className="h-full flex flex-col">
+                <ScrollArea className="flex-1 [&_[data-radix-scroll-area-scrollbar]]:opacity-0 [&_[data-radix-scroll-area-scrollbar]]:transition-opacity hover:[&_[data-radix-scroll-area-scrollbar]]:opacity-100 [&_[data-radix-scroll-area-scrollbar]]:data-[state=visible]:opacity-100">
+                  <div className="p-6 space-y-6">
+                    {isLoading ? (
+                      <div className="text-center text-custom-text-secondary">Loading messages...</div>
+                    ) : messages.length === 0 ? (
+                      <div className="text-center text-custom-text-secondary">No messages yet</div>
+                    ) : (
+                      messages.map((message) => {
+                        const isMyMessage = message.sender_id === currentUserId
+                        const isSystemMessage = message.type === 'system'
 
-                if (isSystemMessage) {
-                  return (
-                    <div key={message.id} className="flex justify-center">
-                      <div className="bg-custom-background-secondary/50 text-custom-text-secondary text-sm px-4 py-2 rounded-full">
-                        {message.content}
-                      </div>
-                    </div>
-                  )
-                }
+                        if (isSystemMessage) {
+                          return (
+                            <div key={message.id} className="flex justify-center">
+                              <div className="bg-custom-background-secondary/50 text-custom-text-secondary text-sm px-4 py-2 rounded-full">
+                                {message.content}
+                              </div>
+                            </div>
+                          )
+                        }
 
-                return (
-                  <div 
-                    key={message.id}
-                    className={`space-y-2 max-w-[85%] ${isMyMessage ? 'ml-auto' : 'mr-auto'}`}
-                  >
-                    <div className={`flex gap-2 text-sm text-custom-text-secondary ${isMyMessage ? 'flex-row-reverse' : ''}`}>
-                      {!isMyMessage && (
-                        <span>
-                          {variant === 'customer' 
-                            ? (message.sender?.full_name || 'Support Agent')
-                            : otherPartyName
-                          }
-                        </span>
-                      )}
-                      <span>{new Date(message.created_at).toLocaleString()}</span>
-                    </div>
-                    <div className={`p-4 rounded-lg border ${
-                      isMyMessage 
-                        ? 'bg-custom-accent/10 border-custom-accent/20 rounded-tr-none' 
-                        : 'bg-custom-background-secondary border-custom-ui-medium rounded-tl-none'
-                    }`}>
-                      <div className="text-custom-text whitespace-pre-wrap">
-                        {message.content}
-                      </div>
+                        return (
+                          <div 
+                            key={message.id}
+                            className={`space-y-2 max-w-[85%] ${isMyMessage ? 'ml-auto' : 'mr-auto'}`}
+                          >
+                            <div className={`flex gap-2 text-sm text-custom-text-secondary ${isMyMessage ? 'flex-row-reverse' : ''}`}>
+                              {!isMyMessage && (
+                                <span>
+                                  {(variant === 'customer')
+                                    ? (message.sender?.full_name || 'Support Agent')
+                                    : otherPartyName
+                                  }
+                                </span>
+                              )}
+                              <span>{new Date(message.created_at).toLocaleString()}</span>
+                            </div>
+                            <div className={`p-4 rounded-lg border ${
+                              isMyMessage 
+                                ? 'bg-custom-accent/10 border-custom-accent/20 rounded-tr-none' 
+                                : 'bg-custom-background-secondary border-custom-ui-medium rounded-tl-none'
+                            }`}>
+                              <div className="text-custom-text whitespace-pre-wrap">
+                                {message.content}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
+                </ScrollArea>
+
+                {variant === 'customer' && ticket.status === 'new' ? (
+                  <div className="border-t border-custom-ui-medium bg-custom-background p-4">
+                    <Alert>
+                      <AlertDescription>
+                        Your ticket has been submitted. Please wait for a support agent to respond.
+                      </AlertDescription>
+                    </Alert>
+                  </div>
+                ) : (
+                  <div className="border-t border-custom-ui-medium bg-custom-background p-4">
+                    <div className="flex gap-2">
+                      <Textarea
+                        value={newMessage}
+                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewMessage(e.target.value)}
+                        onKeyDown={handleKeyPress}
+                        placeholder="Type your message..."
+                        className="min-h-[80px] resize-none bg-custom-background-secondary border-custom-ui-medium focus:border-custom-accent focus:ring-custom-accent"
+                      />
+                      <Button
+                        className="bg-custom-accent text-white hover:bg-custom-accent/90"
+                        size="icon"
+                        disabled={isSending || !newMessage.trim()}
+                        onClick={handleSendMessage}
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
-                )
-              })
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-        </ScrollArea>
-
-        {variant === 'customer' && ticket.status === 'new' ? (
-          <div className="border-t border-custom-ui-medium bg-custom-background p-4">
-            <Alert>
-              <AlertDescription>
-                Your ticket has been submitted. Please wait for a support agent to respond.
-              </AlertDescription>
-            </Alert>
-          </div>
-        ) : (
-          <div className="border-t border-custom-ui-medium bg-custom-background p-4">
-            <div className="flex gap-2">
-              <Textarea
-                value={newMessage}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewMessage(e.target.value)}
-                onKeyDown={handleKeyPress}
-                placeholder="Type your message..."
-                className="min-h-[80px] resize-none bg-custom-background-secondary border-custom-ui-medium focus:border-custom-accent focus:ring-custom-accent"
+                )}
+              </div>
+            </ResizablePanel>
+            <ResizableHandle />
+            <ResizablePanel defaultSize={40} minSize={20}>
+              <InternalNotesPanel
+                ticketId={ticket.id}
+                onClose={() => setShowInternalNotes(false)}
               />
-              <Button
-                className="bg-custom-accent text-white hover:bg-custom-accent/90"
-                size="icon"
-                disabled={isSending || !newMessage.trim()}
-                onClick={handleSendMessage}
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        ) : (
+          <div className="flex-1 flex flex-col">
+            <ScrollArea className="flex-1 [&_[data-radix-scroll-area-scrollbar]]:opacity-0 [&_[data-radix-scroll-area-scrollbar]]:transition-opacity hover:[&_[data-radix-scroll-area-scrollbar]]:opacity-100 [&_[data-radix-scroll-area-scrollbar]]:data-[state=visible]:opacity-100">
+              <div className="p-6 space-y-6">
+                {isLoading ? (
+                  <div className="text-center text-custom-text-secondary">Loading messages...</div>
+                ) : messages.length === 0 ? (
+                  <div className="text-center text-custom-text-secondary">No messages yet</div>
+                ) : (
+                  messages.map((message) => {
+                    const isMyMessage = message.sender_id === currentUserId
+                    const isSystemMessage = message.type === 'system'
+
+                    if (isSystemMessage) {
+                      return (
+                        <div key={message.id} className="flex justify-center">
+                          <div className="bg-custom-background-secondary/50 text-custom-text-secondary text-sm px-4 py-2 rounded-full">
+                            {message.content}
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <div 
+                        key={message.id}
+                        className={`space-y-2 max-w-[85%] ${isMyMessage ? 'ml-auto' : 'mr-auto'}`}
+                      >
+                        <div className={`flex gap-2 text-sm text-custom-text-secondary ${isMyMessage ? 'flex-row-reverse' : ''}`}>
+                          {!isMyMessage && (
+                            <span>
+                              {(variant === 'customer')
+                                ? (message.sender?.full_name || 'Support Agent')
+                                : otherPartyName
+                              }
+                            </span>
+                          )}
+                          <span>{new Date(message.created_at).toLocaleString()}</span>
+                        </div>
+                        <div className={`p-4 rounded-lg border ${
+                          isMyMessage 
+                            ? 'bg-custom-accent/10 border-custom-accent/20 rounded-tr-none' 
+                            : 'bg-custom-background-secondary border-custom-ui-medium rounded-tl-none'
+                        }`}>
+                          <div className="text-custom-text whitespace-pre-wrap">
+                            {message.content}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+            </ScrollArea>
+
+            {variant === 'customer' && ticket.status === 'new' ? (
+              <div className="border-t border-custom-ui-medium bg-custom-background p-4">
+                <Alert>
+                  <AlertDescription>
+                    Your ticket has been submitted. Please wait for a support agent to respond.
+                  </AlertDescription>
+                </Alert>
+              </div>
+            ) : (
+              <div className="border-t border-custom-ui-medium bg-custom-background p-4">
+                <div className="flex gap-2">
+                  <Textarea
+                    value={newMessage}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewMessage(e.target.value)}
+                    onKeyDown={handleKeyPress}
+                    placeholder="Type your message..."
+                    className="min-h-[80px] resize-none bg-custom-background-secondary border-custom-ui-medium focus:border-custom-accent focus:ring-custom-accent"
+                  />
+                  <Button
+                    className="bg-custom-accent text-white hover:bg-custom-accent/90"
+                    size="icon"
+                    disabled={isSending || !newMessage.trim()}
+                    onClick={handleSendMessage}
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

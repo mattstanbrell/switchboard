@@ -91,6 +91,45 @@ export type Database = {
           },
         ]
       }
+      internal_notes: {
+        Row: {
+          content: string
+          created_at: string
+          human_agent_id: string
+          id: number
+          ticket_id: number
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          human_agent_id: string
+          id?: number
+          ticket_id: number
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          human_agent_id?: string
+          id?: number
+          ticket_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "internal_notes_human_agent_id_fkey"
+            columns: ["human_agent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "internal_notes_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           content: string
@@ -275,6 +314,7 @@ export type Database = {
           focus_area_id: number | null
           human_agent_id: string | null
           id: number
+          priority: Database["public"]["Enums"]["ticket_priority"]
           resolved_at: string | null
           status: string
           subject: string
@@ -287,6 +327,7 @@ export type Database = {
           focus_area_id?: number | null
           human_agent_id?: string | null
           id?: number
+          priority?: Database["public"]["Enums"]["ticket_priority"]
           resolved_at?: string | null
           status?: string
           subject: string
@@ -299,6 +340,7 @@ export type Database = {
           focus_area_id?: number | null
           human_agent_id?: string | null
           id?: number
+          priority?: Database["public"]["Enums"]["ticket_priority"]
           resolved_at?: string | null
           status?: string
           subject?: string
@@ -413,6 +455,7 @@ export type Database = {
     }
     Enums: {
       message_type: "user" | "system"
+      ticket_priority: "Low" | "Medium" | "High"
     }
     CompositeTypes: {
       [_ in never]: never

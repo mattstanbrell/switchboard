@@ -14,12 +14,15 @@ import { Button } from "@/components/ui/button"
 import { AgentConversationPanel } from './conversation-panel'
 import { useState } from 'react'
 import { ResizableLayout } from '@/components/shared/resizable-layout'
+import { cn } from '@/lib/utils'
+import { PrioritySelect } from '@/components/priority-select'
 
 type Tables = Database['public']['Tables']
 
 export type FocusArea = Tables['focus_areas']['Row']
 export type Ticket = Tables['tickets']['Row'] & {
   focus_areas: FocusArea
+  priority: 'Low' | 'Medium' | 'High'
 }
 export type Team = Tables['teams']['Row'] & {
   team_focus_areas: Array<{
@@ -41,64 +44,65 @@ export function HumanAgentDashboard({ profile, tickets }: Props) {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
 
   const ticketTable = (
-    <Table>
-      <TableHeader className="sticky top-0 bg-custom-background z-10">
-        <TableRow className="hover:bg-custom-background">
-          <TableHead className="text-custom-text">ID</TableHead>
-          <TableHead className="text-custom-text">Subject</TableHead>
-          <TableHead className="text-custom-text">Focus Area</TableHead>
-          <TableHead className="text-custom-text">Status</TableHead>
-          <TableHead className="text-custom-text">Created</TableHead>
-          <TableHead className="text-custom-text">Actions</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {tickets.length === 0 ? (
-          <TableRow>
-            <TableCell colSpan={6} className="text-center text-custom-text-secondary">
-              No tickets assigned to your team.
-            </TableCell>
-          </TableRow>
-        ) : (
-          tickets.map((ticket) => (
-            <TableRow 
-              key={ticket.id}
-              className={
-                selectedTicket?.id === ticket.id 
-                  ? "bg-custom-ui-faint hover:bg-custom-ui-faint" 
-                  : "hover:bg-custom-background-secondary"
-              }
-            >
-              <TableCell className="text-custom-text">#{ticket.id}</TableCell>
-              <TableCell className="text-custom-text">{ticket.subject}</TableCell>
-              <TableCell>
-                <Badge variant="secondary">
-                  {ticket.focus_areas.name}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                <Badge variant="outline">
-                  {ticket.status}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-custom-text-secondary">
-                {new Date(ticket.created_at).toISOString().split('T')[0]}
-              </TableCell>
-              <TableCell>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="bg-custom-background border-custom-ui-medium hover:bg-custom-ui-faint text-custom-text"
+    <div className="h-full flex flex-col">
+      <div className="relative flex-1 overflow-auto">
+        <div className="mx-auto max-w-[1400px]">
+          <div className="sticky top-0 h-10 bg-custom-background border-b border-custom-ui-medium">
+            <div className="grid grid-cols-10 h-full px-6">
+              <div className="col-span-1 flex items-center font-medium text-custom-text">ID</div>
+              <div className="col-span-2 flex items-center font-medium text-custom-text">Subject</div>
+              <div className="col-span-2 flex items-center font-medium text-custom-text">Focus Area</div>
+              <div className="col-span-2 flex items-center font-medium text-custom-text">Priority</div>
+              <div className="col-span-2 flex items-center font-medium text-custom-text">Status</div>
+              <div className="col-span-1 flex items-center font-medium text-custom-text">Created</div>
+            </div>
+          </div>
+          <div>
+            {tickets.length === 0 ? (
+              <div className="px-6 py-4 text-center text-custom-text-secondary">
+                No tickets assigned to your team.
+              </div>
+            ) : (
+              tickets.map((ticket) => (
+                <div 
+                  key={ticket.id}
                   onClick={() => setSelectedTicket(ticket)}
+                  className={cn(
+                    "border-b border-custom-ui-medium hover:bg-custom-background-secondary transition-colors cursor-pointer",
+                    selectedTicket?.id === ticket.id && "bg-custom-ui-faint hover:bg-custom-ui-faint"
+                  )}
                 >
-                  View
-                </Button>
-              </TableCell>
-            </TableRow>
-          ))
-        )}
-      </TableBody>
-    </Table>
+                  <div className="grid grid-cols-10 px-6 py-4">
+                    <div className="col-span-1 flex items-center text-custom-text">
+                      #{ticket.id}
+                    </div>
+                    <div className="col-span-2 flex items-center text-custom-text">
+                      {ticket.subject}
+                    </div>
+                    <div className="col-span-2 flex items-center">
+                      <Badge variant="secondary">
+                        {ticket.focus_areas.name}
+                      </Badge>
+                    </div>
+                    <div className="col-span-2 flex items-center">
+                      <PrioritySelect ticket={ticket} />
+                    </div>
+                    <div className="col-span-2 flex items-center">
+                      <Badge variant="outline">
+                        {ticket.status}
+                      </Badge>
+                    </div>
+                    <div className="col-span-1 flex items-center text-custom-text-secondary">
+                      {new Date(ticket.created_at).toISOString().split('T')[0]}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   )
 
   const conversationPanel = selectedTicket ? (

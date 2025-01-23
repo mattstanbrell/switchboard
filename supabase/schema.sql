@@ -35,6 +35,14 @@ CREATE TYPE "public"."message_type" AS ENUM (
 
 ALTER TYPE "public"."message_type" OWNER TO "postgres";
 
+CREATE TYPE "public"."ticket_priority" AS ENUM (
+    'Low',
+    'Medium',
+    'High'
+);
+
+ALTER TYPE "public"."ticket_priority" OWNER TO "postgres";
+
 CREATE OR REPLACE FUNCTION "public"."assign_agent_to_team"("agent_id" "uuid", "team_id" bigint, "admin_id" "uuid") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -452,6 +460,27 @@ ALTER TABLE "public"."focus_areas_id_seq" OWNER TO "postgres";
 
 ALTER SEQUENCE "public"."focus_areas_id_seq" OWNED BY "public"."focus_areas"."id";
 
+CREATE TABLE IF NOT EXISTS "public"."internal_notes" (
+    "id" bigint NOT NULL,
+    "ticket_id" bigint NOT NULL,
+    "human_agent_id" "uuid" NOT NULL,
+    "created_at" timestamp without time zone DEFAULT "now"() NOT NULL,
+    "content" "text" NOT NULL
+);
+
+ALTER TABLE "public"."internal_notes" OWNER TO "postgres";
+
+CREATE SEQUENCE IF NOT EXISTS "public"."internal_notes_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+ALTER TABLE "public"."internal_notes_id_seq" OWNER TO "postgres";
+
+ALTER SEQUENCE "public"."internal_notes_id_seq" OWNED BY "public"."internal_notes"."id";
+
 CREATE TABLE IF NOT EXISTS "public"."messages" (
     "id" bigint NOT NULL,
     "ticket_id" bigint NOT NULL,
@@ -518,7 +547,8 @@ CREATE TABLE IF NOT EXISTS "public"."tickets" (
     "team_id" bigint,
     "focus_area_id" bigint,
     "resolved_at" timestamp without time zone,
-    "closed_at" timestamp without time zone
+    "closed_at" timestamp without time zone,
+    "priority" "public"."ticket_priority" DEFAULT 'Medium'::"public"."ticket_priority" NOT NULL
 );
 
 ALTER TABLE "public"."tickets" OWNER TO "postgres";
@@ -538,6 +568,8 @@ ALTER TABLE ONLY "public"."field_definitions" ALTER COLUMN "id" SET DEFAULT "nex
 
 ALTER TABLE ONLY "public"."focus_areas" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."focus_areas_id_seq"'::"regclass");
 
+ALTER TABLE ONLY "public"."internal_notes" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."internal_notes_id_seq"'::"regclass");
+
 ALTER TABLE ONLY "public"."messages" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."messages_id_seq"'::"regclass");
 
 ALTER TABLE ONLY "public"."teams" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."teams_id_seq"'::"regclass");
@@ -552,6 +584,9 @@ ALTER TABLE ONLY "public"."field_definitions"
 
 ALTER TABLE ONLY "public"."focus_areas"
     ADD CONSTRAINT "focus_areas_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."internal_notes"
+    ADD CONSTRAINT "internal_notes_pkey" PRIMARY KEY ("id");
 
 ALTER TABLE ONLY "public"."messages"
     ADD CONSTRAINT "messages_pkey" PRIMARY KEY ("id");
@@ -578,6 +613,12 @@ ALTER TABLE ONLY "public"."field_definitions"
 
 ALTER TABLE ONLY "public"."focus_areas"
     ADD CONSTRAINT "focus_areas_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id");
+
+ALTER TABLE ONLY "public"."internal_notes"
+    ADD CONSTRAINT "internal_notes_human_agent_id_fkey" FOREIGN KEY ("human_agent_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."internal_notes"
+    ADD CONSTRAINT "internal_notes_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
 
 ALTER TABLE ONLY "public"."messages"
     ADD CONSTRAINT "messages_sender_id_fkey" FOREIGN KEY ("sender_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
@@ -671,6 +712,29 @@ CREATE POLICY "admins_can_update_focus_areas" ON "public"."focus_areas" FOR UPDA
    FROM "public"."profiles"
   WHERE (("profiles"."id" = "auth"."uid"()) AND ("profiles"."role" = 'admin'::"text") AND ("profiles"."company_id" = "focus_areas"."company_id")))));
 
+CREATE POLICY "agents_and_admins_can_delete_own_notes" ON "public"."internal_notes" FOR DELETE TO "authenticated" USING ((("public"."get_user_role"() = ANY (ARRAY['admin'::"text", 'human_agent'::"text"])) AND (("human_agent_id" = "auth"."uid"()) OR ("public"."get_user_role"() = 'admin'::"text")) AND (EXISTS ( SELECT 1
+   FROM ("public"."tickets"
+     JOIN "public"."profiles" ON (("tickets"."customer_id" = "profiles"."id")))
+  WHERE (("tickets"."id" = "internal_notes"."ticket_id") AND ("profiles"."company_id" = "public"."get_user_company_id"()))))));
+
+CREATE POLICY "agents_and_admins_can_insert_internal_notes" ON "public"."internal_notes" FOR INSERT TO "authenticated" WITH CHECK ((("public"."get_user_role"() = ANY (ARRAY['admin'::"text", 'human_agent'::"text"])) AND ("human_agent_id" = "auth"."uid"()) AND (EXISTS ( SELECT 1
+   FROM ("public"."tickets"
+     JOIN "public"."profiles" ON (("tickets"."customer_id" = "profiles"."id")))
+  WHERE (("tickets"."id" = "internal_notes"."ticket_id") AND ("profiles"."company_id" = "public"."get_user_company_id"()))))));
+
+CREATE POLICY "agents_and_admins_can_select_internal_notes" ON "public"."internal_notes" FOR SELECT TO "authenticated" USING ((("public"."get_user_role"() = ANY (ARRAY['admin'::"text", 'human_agent'::"text"])) AND (EXISTS ( SELECT 1
+   FROM ("public"."tickets"
+     JOIN "public"."profiles" ON (("tickets"."customer_id" = "profiles"."id")))
+  WHERE (("tickets"."id" = "internal_notes"."ticket_id") AND ("profiles"."company_id" = "public"."get_user_company_id"()))))));
+
+CREATE POLICY "agents_and_admins_can_update_own_notes" ON "public"."internal_notes" FOR UPDATE TO "authenticated" USING ((("public"."get_user_role"() = ANY (ARRAY['admin'::"text", 'human_agent'::"text"])) AND (EXISTS ( SELECT 1
+   FROM ("public"."tickets"
+     JOIN "public"."profiles" ON (("tickets"."customer_id" = "profiles"."id")))
+  WHERE (("tickets"."id" = "internal_notes"."ticket_id") AND ("profiles"."company_id" = "public"."get_user_company_id"())))))) WITH CHECK ((("public"."get_user_role"() = ANY (ARRAY['admin'::"text", 'human_agent'::"text"])) AND (("human_agent_id" = "auth"."uid"()) OR ("public"."get_user_role"() = 'admin'::"text")) AND (EXISTS ( SELECT 1
+   FROM ("public"."tickets"
+     JOIN "public"."profiles" ON (("tickets"."customer_id" = "profiles"."id")))
+  WHERE (("tickets"."id" = "internal_notes"."ticket_id") AND ("profiles"."company_id" = "public"."get_user_company_id"()))))));
+
 CREATE POLICY "allow_insert_companies" ON "public"."companies" FOR INSERT TO "authenticated" WITH CHECK (true);
 
 CREATE POLICY "allow_select_companies" ON "public"."companies" FOR SELECT TO "authenticated" USING (true);
@@ -694,6 +758,8 @@ CREATE POLICY "human_agents_can_update_tickets" ON "public"."tickets" FOR UPDATE
   WHERE (("p"."id" = "auth"."uid"()) AND ("p"."role" = 'human_agent'::"text")))));
 
 CREATE POLICY "human_agents_can_view_customer_profiles" ON "public"."profiles" FOR SELECT TO "authenticated" USING ((("role" = 'customer'::"text") AND ("public"."get_user_role"() = 'human_agent'::"text") AND ("public"."get_user_company_id"() = "company_id")));
+
+ALTER TABLE "public"."internal_notes" ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE "public"."messages" ENABLE ROW LEVEL SECURITY;
 
@@ -791,6 +857,8 @@ ALTER PUBLICATION "supabase_realtime_messages_publication_v2_34_6" OWNER TO "sup
 
 ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."focus_areas";
 
+ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."internal_notes";
+
 ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."messages";
 
 ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."profiles";
@@ -869,6 +937,14 @@ GRANT ALL ON TABLE "public"."focus_areas" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."focus_areas_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."focus_areas_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."focus_areas_id_seq" TO "service_role";
+
+GRANT ALL ON TABLE "public"."internal_notes" TO "anon";
+GRANT ALL ON TABLE "public"."internal_notes" TO "authenticated";
+GRANT ALL ON TABLE "public"."internal_notes" TO "service_role";
+
+GRANT ALL ON SEQUENCE "public"."internal_notes_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."internal_notes_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."internal_notes_id_seq" TO "service_role";
 
 GRANT ALL ON TABLE "public"."messages" TO "anon";
 GRANT ALL ON TABLE "public"."messages" TO "authenticated";

@@ -18,6 +18,9 @@ export default {
   				'text-secondary': '#6F6E69',
   				'text-tertiary': '#B7B5AC',
   				accent: '#24837B',
+  				'accent-red': '#AF3029',
+  				'accent-orange': '#BC5215',
+  				'accent-yellow': '#AD8301',
   				ui: {
   					faint: '#E6E4D9',
   					medium: '#DAD8CE',

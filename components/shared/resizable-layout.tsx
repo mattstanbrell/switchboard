@@ -1,6 +1,7 @@
 'use client'
 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { ReactNode } from 'react'
 
 interface Props {
@@ -18,11 +19,11 @@ export function ResizableLayout({ mainContent, sideContent }: Props) {
           defaultSize={sideContent ? 60 : 100}
           minSize={30}
         >
-          <div className="h-full overflow-y-auto pl-8">
-            <div className="overflow-x-hidden">
+          <ScrollArea className="h-full [&_[data-radix-scroll-area-viewport]]:h-full [&_[data-radix-scroll-area-scrollbar]]:opacity-0 [&_[data-radix-scroll-area-scrollbar]]:transition-opacity hover:[&_[data-radix-scroll-area-scrollbar]]:opacity-100 [&_[data-radix-scroll-area-scrollbar]]:data-[state=visible]:opacity-100">
+            <div className="h-full">
               {mainContent}
             </div>
-          </div>
+          </ScrollArea>
         </ResizablePanel>
 
         {sideContent && (

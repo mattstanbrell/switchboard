@@ -13,6 +13,10 @@
 
 ### Accent Colors
 - **Primary Accent** (`text-custom-accent`, `#24837B`): Links, buttons, and interactive elements
+- **Status Accents**:
+  - **High Priority** (`text-custom-accent-red`, `#AF3029`): Used for high priority items and errors
+  - **Medium Priority** (`text-custom-accent-orange`, `#BC5215`): Used for medium priority items and warnings
+  - **Low Priority** (`text-custom-accent-yellow`, `#AD8301`): Used for low priority items and info
 
 ### UI Element Colors
 - **Faint UI** (`bg-custom-ui-faint`, `#E6E4D9`): Subtle backgrounds, hover states
@@ -37,6 +41,11 @@ text-custom-text             // Primary text
 text-custom-text-secondary   // Secondary text
 text-custom-text-tertiary    // Tertiary text
 text-custom-accent          // Accent color (links, etc.)
+
+// Status Accents (with opacity variants)
+text-custom-accent-red       // High priority (also bg-custom-accent-red/10 etc.)
+text-custom-accent-orange    // Medium priority (also bg-custom-accent-orange/10 etc.)
+text-custom-accent-yellow    // Low priority (also bg-custom-accent-yellow/10 etc.)
 
 // UI Elements
 bg-custom-ui-faint          // Subtle backgrounds
