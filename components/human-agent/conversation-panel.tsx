@@ -1,7 +1,7 @@
 'use client'
 
 import type { Database } from '@/database.types'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { ConversationPanel } from '@/components/shared/conversation-panel'
 
@@ -15,6 +15,10 @@ interface Props {
 
 export function AgentConversationPanel({ ticket: initialTicket, onClose }: Props) {
   const [ticket, setTicket] = useState(initialTicket)
+
+  useEffect(() => {
+    setTicket(initialTicket)
+  }, [initialTicket])
 
   const handleOpenTicket = async () => {
     const supabase = createClient()

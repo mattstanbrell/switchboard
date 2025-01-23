@@ -46,6 +46,9 @@ interface RawTicket {
   customer_id: string
   human_agent_id: string | null
   team_id: number | null
+  priority: 'Low' | 'Medium' | 'High'
+  resolved_at: string | null
+  closed_at: string | null
   focus_areas: FocusArea
 }
 
@@ -129,6 +132,9 @@ export default async function HumanAgentPage() {
         customer_id,
         human_agent_id,
         team_id,
+        priority,
+        resolved_at,
+        closed_at,
         focus_areas!inner (
           id,
           name,
@@ -136,6 +142,7 @@ export default async function HumanAgentPage() {
         )
       `)
       .eq('team_id', profileWithTeam.team_id)
+      .order('priority', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
 
     console.log('=== TICKETS DATA ===')
