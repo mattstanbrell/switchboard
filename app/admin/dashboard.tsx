@@ -18,12 +18,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Checkbox } from "@/components/ui/checkbox"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, CartesianGrid, XAxis, YAxis, Bar, Treemap } from 'recharts'
+import { FocusAreaPill } from "@/components/ui/focus-area-pill"
 
 type Tables = Database['public']['Tables']
 type Profile = Tables['profiles']['Row']
 type FocusArea = Tables['focus_areas']['Row']
 type BaseTeam = Tables['teams']['Row']
 type BaseFieldDefinition = Tables['field_definitions']['Row']
+type TicketPriority = Database['public']['Enums']['ticket_priority']
+type BaseTicket = Tables['tickets']['Row']
 
 interface FieldOption {
   label: string
@@ -46,12 +50,17 @@ interface AdminProfile {
   company_id: string
 }
 
+type Ticket = BaseTicket & {
+  customer: Pick<Profile, 'company_id'>
+}
+
 interface Props {
   initialProfile: AdminProfile
   initialFocusAreas: FocusArea[]
   initialAgents: Profile[]
   initialTeams: TeamWithRelations[]
   initialFieldDefinitions: FieldDefinition[]
+  initialTickets: Ticket[]
 }
 
 interface NavItem {
@@ -71,7 +80,8 @@ export default function AdminDashboard({
   initialFocusAreas,
   initialAgents,
   initialTeams,
-  initialFieldDefinitions
+  initialFieldDefinitions,
+  initialTickets
 }: Props) {
   console.log('Initial Data:', {
     teams: initialTeams,
@@ -88,6 +98,7 @@ export default function AdminDashboard({
   const [agents, setAgents] = useState(initialAgents)
   const [teams, setTeams] = useState(initialTeams)
   const [fieldDefinitions, setFieldDefinitions] = useState(initialFieldDefinitions)
+  const [tickets, setTickets] = useState(initialTickets)
   const [newTeamName, setNewTeamName] = useState('')
   const [selectedFocusAreas, setSelectedFocusAreas] = useState<number[]>([])
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null)
@@ -102,6 +113,103 @@ export default function AdminDashboard({
   const [showBulkAssignDialog, setShowBulkAssignDialog] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedInitialMembers, setSelectedInitialMembers] = useState<string[]>([])
+
+  // Chart colors
+  const statusColors = {
+    new: {
+      bg: 'rgb(246,226,160)',
+      text: 'rgb(122,92,1)',
+      border: 'rgb(122,92,1)'
+    },
+    open: {
+      bg: 'rgb(255,202,187)',
+      text: '#AF3029',
+      border: '#AF3029'
+    },
+    resolved: {
+      bg: 'rgb(221,226,178)',
+      text: 'rgb(82,102,9)',
+      border: 'rgb(82,102,9)'
+    },
+    closed: {
+      bg: 'rgb(230,228,217)',
+      text: 'rgb(78,77,74)',
+      border: 'rgb(78,77,74)'
+    }
+  }
+
+  const priorityColors = {
+    High: {
+      bg: 'rgb(255,202,187)',
+      text: '#AF3029',
+      border: '#AF3029'
+    },
+    Medium: {
+      bg: 'rgb(246,226,160)',
+      text: 'rgb(122,92,1)',
+      border: 'rgb(122,92,1)'
+    },
+    Low: {
+      bg: 'rgb(230,228,217)',
+      text: 'rgb(78,77,74)',
+      border: 'rgb(78,77,74)'
+    }
+  }
+
+  // Status distribution data
+  const statusData = [
+    { name: 'New', value: tickets.filter(t => t.status === 'new').length },
+    { name: 'Open', value: tickets.filter(t => t.status === 'open').length },
+    { name: 'Resolved', value: tickets.filter(t => t.status === 'resolved').length },
+    { name: 'Closed', value: tickets.filter(t => t.status === 'closed').length },
+  ]
+
+  // Priority distribution data
+  const priorityData = [
+    { name: 'High', value: tickets.filter(t => t.priority === 'High').length },
+    { name: 'Medium', value: tickets.filter(t => t.priority === 'Medium').length },
+    { name: 'Low', value: tickets.filter(t => t.priority === 'Low').length },
+  ]
+
+  // Team performance data
+  const teamPerformanceData = teams.map(team => ({
+    name: team.name,
+    resolved: tickets.filter(t => 
+      t.team_id === team.id && 
+      ['resolved', 'closed'].includes(t.status)
+    ).length,
+    open: tickets.filter(t => 
+      t.team_id === team.id && 
+      t.status === 'open'
+    ).length,
+  }))
+
+  // Add after the teamPerformanceData calculation
+  const teamResolutionTimeData = teams.map(team => {
+    const resolvedTickets = tickets.filter(t => 
+      t.team_id === team.id && 
+      t.resolved_at !== null
+    );
+    
+    const avgResolutionTime = resolvedTickets.reduce((acc, ticket) => {
+      const createdDate = new Date(ticket.created_at);
+      const resolvedDate = new Date(ticket.resolved_at!);
+      const hours = (resolvedDate.getTime() - createdDate.getTime()) / (1000 * 60 * 60);
+      return acc + hours;
+    }, 0) / (resolvedTickets.length || 1);
+
+    return {
+      name: team.name,
+      hours: Math.round(avgResolutionTime * 10) / 10, // Round to 1 decimal place
+      ticketCount: resolvedTickets.length
+    };
+  }).sort((a, b) => a.hours - b.hours); // Sort by resolution time
+
+  // Focus area distribution data
+  const focusAreaData = focusAreas.map(area => ({
+    name: area.name,
+    size: tickets.filter(t => t.focus_area_id === area.id).length,
+  }))
 
   useEffect(() => {
     const supabase = createClient()
@@ -448,43 +556,47 @@ export default function AdminDashboard({
     agent.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false
   )
 
-  const QuickStats = () => (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-      <div className="bg-card p-6 rounded-lg shadow">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-primary/10 rounded-full">
-            <UsersRound className="w-6 h-6 text-primary" />
+  const QuickStats = () => {
+    const unassignedAgents = agents.filter(agent => !agent.team_id).length
+    const totalFocusAreas = focusAreas.length
+    const totalTeams = teams.length
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="p-6 flex flex-col space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-custom-text-muted">Total Agents</h3>
+            <Users className="w-5 h-5 text-custom-accent-teal" />
           </div>
-          <div>
-            <h3 className="text-sm font-medium text-muted-foreground">Total Agents</h3>
-            <p className="text-2xl font-bold">{agents.length}</p>
+          <p className="text-3xl font-semibold">{agents.length}</p>
+        </Card>
+
+        <Card className="p-6 flex flex-col space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-custom-text-muted">Unassigned</h3>
+            <UserPlus className="w-5 h-5 text-custom-accent-teal" />
           </div>
-        </div>
+          <p className="text-3xl font-semibold">{unassignedAgents}</p>
+        </Card>
+
+        <Card className="p-6 flex flex-col space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-custom-text-muted">Focus Areas</h3>
+            <Target className="w-5 h-5 text-custom-accent-teal" />
+          </div>
+          <p className="text-3xl font-semibold">{totalFocusAreas}</p>
+        </Card>
+
+        <Card className="p-6 flex flex-col space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-custom-text-muted">Teams</h3>
+            <UsersRound className="w-5 h-5 text-custom-accent-teal" />
+          </div>
+          <p className="text-3xl font-semibold">{totalTeams}</p>
+        </Card>
       </div>
-      <div className="bg-card p-6 rounded-lg shadow">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-primary/10 rounded-full">
-            <UserPlus className="w-6 h-6 text-primary" />
-          </div>
-          <div>
-            <h3 className="text-sm font-medium text-muted-foreground">Unassigned</h3>
-            <p className="text-2xl font-bold">{unassignedAgents.length}</p>
-          </div>
-        </div>
-      </div>
-      <div className="bg-card p-6 rounded-lg shadow">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-primary/10 rounded-full">
-            <Target className="w-6 h-6 text-primary" />
-          </div>
-          <div>
-            <h3 className="text-sm font-medium text-muted-foreground">Focus Areas</h3>
-            <p className="text-2xl font-bold">{focusAreas.length}</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
+    )
+  }
 
   const renderContent = () => {
     switch (activeSection) {
@@ -492,6 +604,298 @@ export default function AdminDashboard({
         return (
           <div className="space-y-6">
             <QuickStats />
+            
+            {/* Ticket Statistics */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Status Distribution */}
+              <Card className="p-6">
+                <h3 className="text-lg font-semibold mb-6">Ticket Status Distribution</h3>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={statusData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        paddingAngle={5}
+                        dataKey="value"
+                        stroke="#FFFCF0"
+                        strokeWidth={2}
+                      >
+                        {statusData.map((entry) => (
+                          <Cell 
+                            key={`cell-${entry.name}`} 
+                            fill={statusColors[entry.name.toLowerCase() as keyof typeof statusColors].bg}
+                            stroke={statusColors[entry.name.toLowerCase() as keyof typeof statusColors].border}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: '#F2F0E5',
+                          border: 'none',
+                          borderRadius: '8px',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                          color: '#100F0F'
+                        }}
+                        labelStyle={{ color: '#100F0F', fontWeight: 500 }}
+                      />
+                      <Legend 
+                        formatter={(value) => {
+                          const status = value.toLowerCase() as keyof typeof statusColors;
+                          return <span style={{ color: statusColors[status].text }}>{value}</span>;
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+
+              {/* Priority Distribution */}
+              <Card className="p-6">
+                <h3 className="text-lg font-semibold mb-6">Ticket Priority Distribution</h3>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={priorityData}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#DAD8CE" />
+                      <XAxis 
+                        dataKey="name" 
+                        tick={{ fill: '#100F0F' }}
+                        axisLine={{ stroke: '#CECDC3' }}
+                      />
+                      <YAxis 
+                        tick={{ fill: '#100F0F' }}
+                        axisLine={{ stroke: '#CECDC3' }}
+                      />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: '#F2F0E5',
+                          border: 'none',
+                          borderRadius: '8px',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                          color: '#100F0F'
+                        }}
+                        labelStyle={{ color: '#100F0F', fontWeight: 500 }}
+                        cursor={false}
+                      />
+                      <Bar dataKey="value" activeBar={false}>
+                        {priorityData.map((entry) => (
+                          <Cell 
+                            key={`cell-${entry.name}`} 
+                            fill={priorityColors[entry.name as keyof typeof priorityColors].bg}
+                            stroke={priorityColors[entry.name as keyof typeof priorityColors].border}
+                            strokeWidth={1}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+
+              {/* Team Performance */}
+              <Card className="p-6">
+                <h3 className="text-lg font-semibold mb-6">Team Performance</h3>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={teamPerformanceData}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#DAD8CE" />
+                      <XAxis 
+                        dataKey="name" 
+                        tick={{ fill: '#100F0F' }}
+                        axisLine={{ stroke: '#CECDC3' }}
+                      />
+                      <YAxis 
+                        tick={{ fill: '#100F0F' }}
+                        axisLine={{ stroke: '#CECDC3' }}
+                      />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: '#F2F0E5',
+                          border: 'none',
+                          borderRadius: '8px',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                          color: '#100F0F'
+                        }}
+                        labelStyle={{ color: '#100F0F', fontWeight: 500 }}
+                        cursor={false}
+                      />
+                      <Legend 
+                        formatter={(value) => {
+                          const color = value.includes('Resolved') ? statusColors.resolved.text : statusColors.open.text;
+                          return <span style={{ color }}>{value}</span>;
+                        }}
+                      />
+                      <Bar 
+                        dataKey="resolved" 
+                        stackId="a" 
+                        fill={statusColors.resolved.bg} 
+                        stroke={statusColors.resolved.border}
+                        name="Resolved Tickets"
+                        activeBar={false}
+                      />
+                      <Bar 
+                        dataKey="open" 
+                        stackId="a" 
+                        fill={statusColors.open.bg} 
+                        stroke={statusColors.open.border}
+                        name="Open Tickets"
+                        activeBar={false}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+
+              {/* Add after the Team Performance card */}
+              <Card className="p-6">
+                <h3 className="text-lg font-semibold mb-6">Average Resolution Time by Team</h3>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={teamResolutionTimeData}
+                      layout="vertical"
+                      margin={{ top: 20, right: 20, left: 20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#DAD8CE" horizontal={false} />
+                      <XAxis 
+                        type="number"
+                        tick={{ fill: '#100F0F' }}
+                        axisLine={{ stroke: '#CECDC3' }}
+                        label={{ 
+                          value: 'Hours to Resolve', 
+                          position: 'insideBottom', 
+                          offset: -5,
+                          fill: '#100F0F'
+                        }}
+                      />
+                      <YAxis 
+                        type="category"
+                        dataKey="name" 
+                        tick={{ fill: '#100F0F' }}
+                        axisLine={{ stroke: '#CECDC3' }}
+                        width={120}
+                      />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: '#F2F0E5',
+                          border: 'none',
+                          borderRadius: '8px',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                        }}
+                        labelStyle={{ color: '#100F0F', fontWeight: 500 }}
+                        formatter={(value: number) => [
+                          <span style={{ color: '#100F0F', fontWeight: 500 }}>
+                            {value} hours ({teamResolutionTimeData.find(t => t.hours === value)?.ticketCount} tickets)
+                          </span>,
+                          <span style={{ color: '#100F0F', fontWeight: 500 }}>
+                            Avg. Resolution Time
+                          </span>
+                        ]}
+                        cursor={false}
+                      />
+                      <Bar 
+                        dataKey="hours" 
+                        fill="#DDDFB2"
+                        stroke="#100F0F"
+                        strokeWidth={1}
+                        activeBar={false}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+
+              {/* Focus Area Distribution */}
+              <Card className="p-6">
+                <h3 className="text-lg font-semibold mb-6">Tickets by Focus Area</h3>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <Treemap
+                      data={focusAreaData}
+                      dataKey="size"
+                      aspectRatio={4 / 3}
+                      stroke={statusColors.new.border}
+                      fill={statusColors.new.bg}
+                    >
+                      {(props: { 
+                        x: number;
+                        y: number;
+                        width: number;
+                        height: number;
+                        name: string;
+                        value: number;
+                      }) => {
+                        const { x, y, width, height, name, value } = props;
+                        return (
+                          <g>
+                            <rect
+                              x={x}
+                              y={y}
+                              width={width}
+                              height={height}
+                              style={{
+                                fill: statusColors.new.bg,
+                                stroke: statusColors.new.border,
+                                strokeWidth: 1,
+                              }}
+                            />
+                            {width > 50 && height > 30 && (
+                              <text
+                                x={x + width / 2}
+                                y={y + height / 2}
+                                textAnchor="middle"
+                                dominantBaseline="middle"
+                                style={{
+                                  fill: statusColors.new.text,
+                                  fontSize: 14,
+                                  fontWeight: 500,
+                                }}
+                              >
+                                {name}
+                                {value > 0 && (
+                                  <tspan
+                                    x={x + width / 2}
+                                    y={y + height / 2 + 16}
+                                    style={{
+                                      fill: statusColors.new.text,
+                                      fontSize: 12,
+                                      opacity: 0.8,
+                                    }}
+                                  >
+                                    {value} ticket{value !== 1 ? 's' : ''}
+                                  </tspan>
+                                )}
+                              </text>
+                            )}
+                          </g>
+                        );
+                      }}
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: '#F2F0E5',
+                          border: 'none',
+                          borderRadius: '8px',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                          color: '#100F0F'
+                        }}
+                        labelStyle={{ color: '#100F0F', fontWeight: 500 }}
+                        formatter={(value) => [`${value} ticket${value !== 1 ? 's' : ''}`]}
+                      />
+                    </Treemap>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            </div>
           </div>
         )
       case 'agents':
@@ -503,13 +907,19 @@ export default function AdminDashboard({
                 <p className="text-muted-foreground">Manage your support team members and their assignments</p>
               </div>
               <div className="flex gap-2">
-                <div className="flex items-center gap-2 px-3 py-1 bg-muted rounded-lg">
-                  <UserCheck className="w-4 h-4 text-green-500" />
-                  <span className="text-sm">{agents.length - unassignedAgents.length} Assigned</span>
+                <div className="flex items-center gap-2 px-4 py-2 bg-custom-background-secondary rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <UserCheck className="w-4 h-4 text-custom-accent-teal" />
+                    <span className="text-2xl font-semibold">{agents.length - unassignedAgents.length}</span>
+                  </div>
+                  <span className="text-custom-text-secondary">Assigned</span>
                 </div>
-                <div className="flex items-center gap-2 px-3 py-1 bg-muted rounded-lg">
-                  <UserX className="w-4 h-4 text-amber-500" />
-                  <span className="text-sm">{unassignedAgents.length} Unassigned</span>
+                <div className="flex items-center gap-2 px-4 py-2 bg-custom-background-secondary rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <UserX className="w-4 h-4 text-custom-accent-orange" />
+                    <span className="text-2xl font-semibold">{unassignedAgents.length}</span>
+                  </div>
+                  <span className="text-custom-text-secondary">Unassigned</span>
                 </div>
               </div>
             </div>
@@ -576,9 +986,7 @@ export default function AdminDashboard({
                           {team.team_focus_areas.map(({ focus_area_id }) => {
                             const area = focusAreas.find(a => a.id === focus_area_id)
                             return area ? (
-                              <span key={area.id} className="px-2 py-1 text-xs rounded-full bg-primary/10">
-                                {area.name}
-                              </span>
+                              <FocusAreaPill key={area.id} name={area.name} />
                             ) : null
                           })}
                         </div>
@@ -626,13 +1034,9 @@ export default function AdminDashboard({
                                         : [...prev, area.id]
                                     )
                                   }}
-                                  className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                                    selectedFocusAreas.includes(area.id)
-                                      ? 'bg-primary text-primary-foreground'
-                                      : 'bg-muted hover:bg-muted/80'
-                                  }`}
+                                  className="hover:opacity-80 transition-opacity"
                                 >
-                                  {area.name}
+                                  <FocusAreaPill name={area.name} />
                                 </button>
                               ))}
                             </div>
@@ -713,13 +1117,9 @@ export default function AdminDashboard({
                                       : [...prev, area.id]
                                   )
                                 }}
-                                className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                                  selectedFocusAreas.includes(area.id)
-                                    ? 'bg-primary text-primary-foreground'
-                                    : 'bg-muted hover:bg-muted/80'
-                                }`}
+                                className="hover:opacity-80 transition-opacity"
                               >
-                                {area.name}
+                                <FocusAreaPill name={area.name} />
                               </button>
                             ))}
                           </div>
@@ -924,19 +1324,19 @@ export default function AdminDashboard({
           <div className="space-y-6">
             <div className="grid gap-6">
               <Card className="p-6">
-          <FocusAreaManager 
-            initialFocusAreas={focusAreas} 
-            companyId={initialProfile.company_id}
-            onUpdate={setFocusAreas}
-          />
+        <FocusAreaManager 
+          initialFocusAreas={focusAreas} 
+          companyId={initialProfile.company_id}
+          onUpdate={setFocusAreas}
+        />
               </Card>
 
               <Card className="p-6">
-          <FieldDefinitionManager
-            initialFieldDefinitions={fieldDefinitions}
-            companyId={initialProfile.company_id}
-            onUpdate={setFieldDefinitions}
-          />
+        <FieldDefinitionManager
+          initialFieldDefinitions={fieldDefinitions}
+          companyId={initialProfile.company_id}
+          onUpdate={setFieldDefinitions}
+        />
               </Card>
             </div>
         </div>

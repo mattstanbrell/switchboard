@@ -28,6 +28,7 @@ export type Database = {
         Row: {
           allows_multiple: boolean
           company_id: string
+          display_order: number
           field_type: string
           id: number
           is_required: boolean
@@ -38,6 +39,7 @@ export type Database = {
         Insert: {
           allows_multiple?: boolean
           company_id: string
+          display_order: number
           field_type: string
           id?: number
           is_required?: boolean
@@ -48,6 +50,7 @@ export type Database = {
         Update: {
           allows_multiple?: boolean
           company_id?: string
+          display_order?: number
           field_type?: string
           id?: number
           is_required?: boolean
@@ -317,7 +320,6 @@ export type Database = {
           priority: Database["public"]["Enums"]["ticket_priority"]
           resolved_at: string | null
           status: string
-          subject: string
           team_id: number | null
         }
         Insert: {
@@ -330,7 +332,6 @@ export type Database = {
           priority?: Database["public"]["Enums"]["ticket_priority"]
           resolved_at?: string | null
           status?: string
-          subject: string
           team_id?: number | null
         }
         Update: {
@@ -343,7 +344,6 @@ export type Database = {
           priority?: Database["public"]["Enums"]["ticket_priority"]
           resolved_at?: string | null
           status?: string
-          subject?: string
           team_id?: number | null
         }
         Relationships: [

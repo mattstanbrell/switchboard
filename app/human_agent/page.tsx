@@ -125,7 +125,6 @@ export default async function HumanAgentPage() {
       .from('tickets')
       .select(`
         id,
-        subject,
         status,
         created_at,
         focus_area_id,
@@ -139,6 +138,18 @@ export default async function HumanAgentPage() {
           id,
           name,
           company_id
+        ),
+        ticket_fields (
+          value,
+          field_definition: field_definitions (
+            id,
+            name,
+            label,
+            field_type,
+            is_required,
+            allows_multiple,
+            options
+          )
         )
       `)
       .eq('team_id', profileWithTeam.team_id)

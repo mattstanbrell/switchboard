@@ -6,6 +6,7 @@ import { createClient } from '@/utils/supabase/client'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Trash2 } from 'lucide-react'
+import { FocusAreaPill } from "@/components/ui/focus-area-pill"
 
 type Tables = Database['public']['Tables']
 type FocusArea = Tables['focus_areas']['Row']
@@ -100,9 +101,9 @@ export function FocusAreaManager({ initialFocusAreas, companyId, onUpdate }: Pro
         {focusAreas.map((area) => (
           <div 
             key={area.id}
-            className="inline-flex items-center gap-2 px-3 py-2 bg-muted rounded-lg group"
+            className="inline-flex items-center gap-2 px-2 py-1.5 rounded-lg border border-custom-ui-medium group hover:bg-custom-background-secondary transition-colors"
           >
-            <span>{area.name}</span>
+            <FocusAreaPill name={area.name} />
             <Button
               variant="ghost"
               size="icon"

@@ -18,6 +18,17 @@
   - **Medium Priority** (`text-custom-accent-orange`, `#BC5215`): Used for medium priority items and warnings
   - **Low Priority** (`text-custom-accent-yellow`, `#AD8301`): Used for low priority items and info
 
+### Status Colors
+- **New Status** (`rgb(246,226,160)`, text: `rgb(122,92,1)`): Yellow background with dark yellow text
+- **Open Status** (`rgb(255,202,187)`, text: `#AF3029`): Light red background with red text
+- **Resolved Status** (`rgb(221,226,178)`, text: `rgb(82,102,9)`): Light green background with dark green text
+- **Closed Status** (`rgb(230,228,217)`, text: `rgb(78,77,74)`): Light gray background with dark gray text
+
+### Priority Colors
+- **High Priority** (`rgb(255,202,187)`, text: `#AF3029`): Light red background with red text
+- **Medium Priority** (`rgb(246,226,160)`, text: `rgb(122,92,1)`): Yellow background with dark yellow text
+- **Low Priority** (`rgb(230,228,217)`, text: `rgb(78,77,74)`): Light gray background with dark gray text
+
 ### UI Element Colors
 - **Faint UI** (`bg-custom-ui-faint`, `#E6E4D9`): Subtle backgrounds, hover states
 - **Medium UI** (`bg-custom-ui-medium`, `#DAD8CE`): Borders, dividers

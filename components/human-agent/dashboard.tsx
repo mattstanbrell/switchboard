@@ -27,14 +27,31 @@ import { Filter } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { StatusBadge, Status } from '@/components/status-badge'
 import { createClient } from '@/utils/supabase/client'
+import { FocusAreaPill } from "@/components/ui/focus-area-pill"
 
 type Tables = Database['public']['Tables']
+
+interface FieldDefinition {
+  id: number
+  name: string
+  label: string
+  field_type: string
+  is_required: boolean
+  allows_multiple: boolean
+  options: any[] | null
+}
+
+interface TicketField {
+  value: string | null
+  field_definition: FieldDefinition
+}
 
 export type FocusArea = Tables['focus_areas']['Row']
 export type Ticket = Tables['tickets']['Row'] & {
   focus_areas: FocusArea
   priority: 'Low' | 'Medium' | 'High'
   status: 'New' | 'Open' | 'Resolved' | 'Closed'
+  ticket_fields: TicketField[]
 }
 export type Team = Tables['teams']['Row'] & {
   team_focus_areas: Array<{
@@ -209,12 +226,10 @@ export function HumanAgentDashboard({ profile, tickets: initialTickets }: Props)
               <div className="mx-auto max-w-[1400px]">
                 <div className="grid grid-cols-9 px-6 py-4">
                   <div className="col-span-2 flex items-center text-custom-text-secondary">
-                    {ticket.subject}
+                    {ticket.ticket_fields?.find(f => f.field_definition.name === 'subject')?.value || 'No Subject'}
                   </div>
                   <div className="col-span-2 flex items-center">
-                    <div className="bg-custom-background-secondary border border-custom-ui-medium text-custom-text-secondary text-xs px-3 py-1 rounded-full">
-                      {ticket.focus_areas.name}
-                    </div>
+                    <FocusAreaPill name={ticket.focus_areas.name} />
                   </div>
                   <div className="col-span-2 flex items-center">
                     <PrioritySelect ticket={ticket} />
