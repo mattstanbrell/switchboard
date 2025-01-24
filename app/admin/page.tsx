@@ -99,7 +99,7 @@ export default async function AdminPage() {
       id,
       name,
       company_id,
-      profiles (
+      profiles!team_id (
         id,
         full_name
       ),

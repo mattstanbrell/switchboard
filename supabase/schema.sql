@@ -710,6 +710,8 @@ CREATE POLICY "admins_can_update_focus_areas" ON "public"."focus_areas" FOR UPDA
    FROM "public"."profiles"
   WHERE (("profiles"."id" = "auth"."uid"()) AND ("profiles"."role" = 'admin'::"text") AND ("profiles"."company_id" = "focus_areas"."company_id")))));
 
+CREATE POLICY "admins_can_view_company_profiles" ON "public"."profiles" FOR SELECT TO "authenticated" USING ((("public"."get_user_role"() = 'admin'::"text") AND ("public"."get_user_company_id"() = "company_id")));
+
 CREATE POLICY "agents_and_admins_can_delete_own_notes" ON "public"."internal_notes" FOR DELETE TO "authenticated" USING ((("public"."get_user_role"() = ANY (ARRAY['admin'::"text", 'human_agent'::"text"])) AND (("human_agent_id" = "auth"."uid"()) OR ("public"."get_user_role"() = 'admin'::"text")) AND (EXISTS ( SELECT 1
    FROM ("public"."tickets"
      JOIN "public"."profiles" ON (("tickets"."customer_id" = "profiles"."id")))
