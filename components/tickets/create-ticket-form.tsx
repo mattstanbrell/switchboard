@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 type Tables = Database['public']['Tables']
 type BaseFieldDefinition = Tables['field_definitions']['Row']
 type TicketField = Tables['ticket_fields']['Row']
+type FocusArea = Tables['focus_areas']['Row']
 
 interface FieldOption {
   label: string
@@ -24,9 +25,10 @@ export default function CreateTicketForm({ onSuccess }: { onSuccess?: () => void
   const [error, setError] = useState<string | null>(null)
   const [customFields, setCustomFields] = useState<CustomField[]>([])
   const [fieldValues, setFieldValues] = useState<Record<number, string | string[]>>({})
+  const [defaultFocusAreaId, setDefaultFocusAreaId] = useState<number | null>(null)
 
   useEffect(() => {
-    const fetchCustomFields = async () => {
+    const fetchData = async () => {
       const supabase = createClient()
       
       // Get the current user's company_id
@@ -48,6 +50,15 @@ export default function CreateTicketForm({ onSuccess }: { onSuccess?: () => void
         .eq('company_id', profile.company_id)
         .order('display_order')
 
+      // Get focus area with lowest ID for this company
+      const { data: areas } = await supabase
+        .from('focus_areas')
+        .select('id')
+        .eq('company_id', profile.company_id)
+        .order('id')
+        .limit(1)
+        .single()
+
       if (fields) {
         const typedFields: CustomField[] = fields.map(field => ({
           ...field,
@@ -61,9 +72,13 @@ export default function CreateTicketForm({ onSuccess }: { onSuccess?: () => void
         })
         setFieldValues(initialValues)
       }
+
+      if (areas) {
+        setDefaultFocusAreaId(areas.id)
+      }
     }
 
-    fetchCustomFields()
+    fetchData()
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -81,36 +96,34 @@ export default function CreateTicketForm({ onSuccess }: { onSuccess?: () => void
       return
     }
 
-    // Find the subject field
-    const subjectField = customFields.find(f => f.name === 'subject')
-    if (!subjectField) {
-      setError('Subject field is required but not found')
-      setIsLoading(false)
-      return
-    }
-
-    const subject = fieldValues[subjectField.id] as string
-
     try {
+      // Find the subject field
+      const subjectField = customFields.find(f => f.name === 'subject')
+      if (!subjectField) {
+        setError('Subject field is required but not found')
+        setIsLoading(false)
+        return
+      }
+
       // Insert the ticket
       const { data: ticket, error: insertError } = await supabase
         .from('tickets')
         .insert({
-          subject,
           customer_id: user.id,
-          status: 'new'
+          status: 'new',
+          focus_area_id: defaultFocusAreaId
         })
         .select()
         .single()
 
       if (insertError) throw insertError
 
-      // Insert custom field values (excluding subject as it's already in the tickets table)
+      // Insert custom field values (including subject)
       if (ticket) {
         const fieldEntries = Object.entries(fieldValues)
           .filter(([fieldId, value]) => {
             const field = customFields.find(f => f.id === parseInt(fieldId))
-            if (!field || field.name === 'subject') return false // Skip subject field
+            if (!field) return false
             if (field.allows_multiple) {
               return (value as string[]).length > 0
             }
@@ -134,7 +147,7 @@ export default function CreateTicketForm({ onSuccess }: { onSuccess?: () => void
         }
 
         // Create initial message with all field values
-        let messageContent = `Ticket created with subject: ${subject}\n\n`
+        let messageContent = `Ticket created with subject: ${fieldValues[subjectField.id] as string}\n\n`
         
         // Add field values to message
         const fieldMessages = fieldEntries.map(entry => {

@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import CreateTicketForm from '@/components/tickets/create-ticket-form'
 import { Button } from "@/components/ui/button"
+import { StatusBadge, Status } from '@/components/status-badge'
 import {
   Dialog,
   DialogContent,
@@ -13,17 +14,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 import { CustomerConversationPanel } from '@/components/customer/conversation-panel'
 import { ResizableLayout } from '@/components/shared/resizable-layout'
+import { cn } from '@/lib/utils'
 
 type Tables = Database['public']['Tables']
 
@@ -103,66 +96,65 @@ export default function CustomerPage() {
   }, [router, open]) // Refetch when dialog closes
 
   const ticketTable = (
-    <Table>
-      <TableHeader className="sticky top-0 bg-custom-background z-10">
-        <TableRow className="hover:bg-custom-background">
-          <TableHead className="text-custom-text">ID</TableHead>
-          <TableHead className="text-custom-text">Subject</TableHead>
-          <TableHead className="text-custom-text">Status</TableHead>
-          <TableHead className="text-custom-text">Created</TableHead>
-          <TableHead className="text-custom-text">Actions</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
+    <div className="h-full flex flex-col">
+      <div className="relative flex-1 overflow-auto">
+        <div className="sticky top-0 h-10 bg-custom-background-secondary border-b border-custom-ui-medium w-full">
+          <div className="container mx-auto max-w-[1000px] h-full px-4">
+            <div className="grid grid-cols-4 h-full px-6">
+              <div className="flex items-center font-semibold text-custom-text text-xs uppercase">ID</div>
+              <div className="flex items-center font-semibold text-custom-text text-xs uppercase">Subject</div>
+              <div className="flex items-center font-semibold text-custom-text text-xs uppercase">Status</div>
+              <div className="flex items-center font-semibold text-custom-text text-xs uppercase">Created</div>
+            </div>
+          </div>
+        </div>
         {isLoading ? (
-          <TableRow>
-            <TableCell colSpan={5} className="text-center text-custom-text-secondary">
-              Loading tickets...
-            </TableCell>
-          </TableRow>
+          <div className="w-full bg-custom-background border-b border-custom-ui-medium">
+            <div className="container mx-auto max-w-[1000px] px-4">
+              <div className="px-6 py-4 text-center text-custom-text-secondary">
+                Loading tickets...
+              </div>
+            </div>
+          </div>
         ) : tickets.length === 0 ? (
-          <TableRow>
-            <TableCell colSpan={5} className="text-center text-custom-text-secondary">
-              No tickets found. Create your first ticket to get started.
-            </TableCell>
-          </TableRow>
+          <div className="w-full bg-custom-background border-b border-custom-ui-medium">
+            <div className="container mx-auto max-w-[1000px] px-4">
+              <div className="px-6 py-4 text-center text-custom-text-secondary">
+                No tickets found. Create your first ticket to get started.
+              </div>
+            </div>
+          </div>
         ) : (
           tickets.map((ticket) => (
-            <TableRow 
+            <div 
               key={ticket.id}
-              className={
-                selectedTicket?.id === ticket.id 
-                  ? "bg-custom-ui-faint hover:bg-custom-ui-faint" 
-                  : "hover:bg-custom-background-secondary"
-              }
+              onClick={() => setSelectedTicket(ticket)}
+              className={cn(
+                "w-full border-b border-custom-ui-medium hover:bg-custom-background-secondary transition-colors cursor-pointer",
+                selectedTicket?.id === ticket.id && "bg-custom-ui-faint hover:bg-custom-ui-faint"
+              )}
             >
-              <TableCell className="text-custom-text">#{ticket.id}</TableCell>
-              <TableCell className="text-custom-text">
-                {ticket.ticket_fields?.find(f => f.field_definition.name === 'subject')?.value || 'No Subject'}
-              </TableCell>
-              <TableCell>
-                <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-custom-ui-faint">
-                  {ticket.status}
-                </span>
-              </TableCell>
-              <TableCell className="text-custom-text-secondary">
-                {new Date(ticket.created_at).toLocaleDateString()}
-              </TableCell>
-              <TableCell>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="bg-custom-background border-custom-ui-medium hover:bg-custom-ui-faint text-custom-text"
-                  onClick={() => setSelectedTicket(ticket)}
-                >
-                  View
-                </Button>
-              </TableCell>
-            </TableRow>
+              <div className="container mx-auto max-w-[1000px] px-4">
+                <div className="grid grid-cols-4 px-6 py-4">
+                  <div className="flex items-center text-custom-text-secondary">
+                    #{ticket.id}
+                  </div>
+                  <div className="flex items-center text-custom-text-secondary">
+                    {ticket.ticket_fields?.find(f => f.field_definition.name === 'subject')?.value || 'No Subject'}
+                  </div>
+                  <div className="flex items-center">
+                    <StatusBadge status={ticket.status.toLowerCase() as Status} />
+                  </div>
+                  <div className="flex items-center text-custom-text-secondary text-sm">
+                    {new Date(ticket.created_at).toISOString().split('T')[0].replace(/-/g, '/')}
+                  </div>
+                </div>
+              </div>
+            </div>
           ))
         )}
-      </TableBody>
-    </Table>
+      </div>
+    </div>
   )
 
   const conversationPanel = selectedTicket ? (
