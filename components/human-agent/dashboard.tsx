@@ -16,6 +16,15 @@ import { useState } from 'react'
 import { ResizableLayout } from '@/components/shared/resizable-layout'
 import { cn } from '@/lib/utils'
 import { PrioritySelect } from '@/components/priority-select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Filter } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
 
 type Tables = Database['public']['Tables']
 
@@ -42,6 +51,21 @@ interface Props {
 export function HumanAgentDashboard({ profile, tickets }: Props) {
   const team = profile.teams
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
+  const [selectedFocusAreas, setSelectedFocusAreas] = useState<string[]>([])
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([])
+  const [focusAreaOpen, setFocusAreaOpen] = useState(false)
+  const [statusOpen, setStatusOpen] = useState(false)
+
+  // Get unique focus areas and statuses
+  const uniqueFocusAreas = Array.from(new Set(tickets.map(t => t.focus_areas.name)))
+  const uniqueStatuses = Array.from(new Set(tickets.map(t => t.status)))
+
+  // Filter tickets based on selected filters
+  const filteredTickets = tickets.filter(ticket => {
+    const focusAreaMatch = selectedFocusAreas.length === 0 || selectedFocusAreas.includes(ticket.focus_areas.name)
+    const statusMatch = selectedStatuses.length === 0 || selectedStatuses.includes(ticket.status)
+    return focusAreaMatch && statusMatch
+  })
 
   const ticketTable = (
     <div className="h-full flex flex-col">
@@ -51,19 +75,79 @@ export function HumanAgentDashboard({ profile, tickets }: Props) {
             <div className="grid grid-cols-10 h-full px-6">
               <div className="col-span-1 flex items-center font-medium text-custom-text">ID</div>
               <div className="col-span-2 flex items-center font-medium text-custom-text">Subject</div>
-              <div className="col-span-2 flex items-center font-medium text-custom-text">Focus Area</div>
+              <div className="col-span-2 flex items-center font-medium text-custom-text gap-2">
+                Focus Area
+                <Select open={focusAreaOpen} onOpenChange={setFocusAreaOpen}>
+                  <SelectTrigger className="h-7 w-7 p-0 border-0 shadow-none bg-transparent hover:bg-transparent focus:ring-0 focus:ring-offset-0 [&>span]:hidden [&>svg:not(.filter-icon)]:hidden">
+                    <Filter className={cn(
+                      "h-4 w-4 transition-colors filter-icon",
+                      selectedFocusAreas.length > 0 ? "text-custom-accent" : "text-custom-text-secondary hover:text-custom-text"
+                    )} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {uniqueFocusAreas.map((area) => (
+                      <div key={area} className="flex items-center space-x-2 p-2">
+                        <Checkbox
+                          id={area}
+                          checked={selectedFocusAreas.includes(area)}
+                          onCheckedChange={(checked: boolean | 'indeterminate') => {
+                            setSelectedFocusAreas(prev => 
+                              checked === true
+                                ? [...prev, area]
+                                : prev.filter(a => a !== area)
+                            )
+                          }}
+                        />
+                        <label htmlFor={area} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                          {area}
+                        </label>
+                      </div>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="col-span-2 flex items-center font-medium text-custom-text">Priority</div>
-              <div className="col-span-2 flex items-center font-medium text-custom-text">Status</div>
+              <div className="col-span-2 flex items-center font-medium text-custom-text gap-2">
+                Status
+                <Select open={statusOpen} onOpenChange={setStatusOpen}>
+                  <SelectTrigger className="h-7 w-7 p-0 border-0 shadow-none bg-transparent hover:bg-transparent focus:ring-0 focus:ring-offset-0 [&>span]:hidden [&>svg:not(.filter-icon)]:hidden">
+                    <Filter className={cn(
+                      "h-4 w-4 transition-colors filter-icon",
+                      selectedStatuses.length > 0 ? "text-custom-accent" : "text-custom-text-secondary hover:text-custom-text"
+                    )} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {uniqueStatuses.map((status) => (
+                      <div key={status} className="flex items-center space-x-2 p-2">
+                        <Checkbox
+                          id={status}
+                          checked={selectedStatuses.includes(status)}
+                          onCheckedChange={(checked: boolean | 'indeterminate') => {
+                            setSelectedStatuses(prev => 
+                              checked === true
+                                ? [...prev, status]
+                                : prev.filter(s => s !== status)
+                            )
+                          }}
+                        />
+                        <label htmlFor={status} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                          {status}
+                        </label>
+                      </div>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="col-span-1 flex items-center font-medium text-custom-text">Created</div>
             </div>
           </div>
           <div>
-            {tickets.length === 0 ? (
+            {filteredTickets.length === 0 ? (
               <div className="px-6 py-4 text-center text-custom-text-secondary">
-                No tickets assigned to your team.
+                No tickets match the selected filters.
               </div>
             ) : (
-              tickets.map((ticket) => (
+              filteredTickets.map((ticket) => (
                 <div 
                   key={ticket.id}
                   onClick={() => setSelectedTicket(ticket)}
