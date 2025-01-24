@@ -180,37 +180,29 @@ export function InternalNotesPanel({ ticketId, onClose }: Props) {
               <div className="text-center text-custom-text-secondary">No internal notes yet</div>
             ) : (
               notes.map((note) => (
-                <div key={note.id} className="bg-custom-ui-light rounded-lg p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="text-sm text-custom-text-secondary">
-                      {note.agent?.full_name || 'Unknown Agent'}
-                    </div>
-                    <div className="text-xs text-custom-text-secondary">
-                      {new Date(note.created_at).toLocaleString()}
+                <div key={note.id} className="space-y-2 max-w-[85%]">
+                  <div className="flex gap-2 text-sm text-custom-text-secondary">
+                    <span>{note.agent?.full_name || 'Unknown Agent'}</span>
+                    <span>{new Date(note.created_at).toLocaleString()}</span>
+                  </div>
+                  <div className="p-4 rounded-lg border bg-custom-background-secondary border-custom-ui-medium rounded-tl-none">
+                    <div className="text-custom-text whitespace-pre-wrap">
+                      {note.content}
                     </div>
                   </div>
-                  <p className="text-custom-text whitespace-pre-wrap">{note.content}</p>
                 </div>
               ))
             )}
           </div>
         </ScrollArea>
 
-        <div className="p-4 border-t border-custom-ui-medium">
+        <div className="p-4 border-t border-custom-ui-medium bg-custom-background">
           <Textarea
-            placeholder="Write an internal note..."
             value={newNoteContent}
             onChange={(e) => setNewNoteContent(e.target.value)}
             onKeyDown={handleKeyPress}
-            className="mb-2"
-            rows={3}
+            className="min-h-[80px] resize-none bg-custom-background-secondary border-custom-ui-medium focus:border-custom-ui-medium/50 focus:ring-0"
           />
-          <Button 
-            onClick={handleAddNote}
-            disabled={isSending || !newNoteContent.trim()}
-          >
-            Add Note
-          </Button>
         </div>
       </div>
     </div>

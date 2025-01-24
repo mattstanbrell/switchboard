@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { Badge } from "@/components/ui/badge"
-import { X, Send } from "lucide-react"
+import { X, Send, PencilLine } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { RealtimeChannel } from '@supabase/supabase-js'
@@ -198,60 +198,79 @@ export function ConversationPanel({
       <div className="flex gap-2 items-center">
         {ticket.status === 'new' && onOpenTicket && (
           <Button
-            variant="outline"
+            variant="ghost"
             onClick={onOpenTicket}
             disabled={isOpening}
+            className="bg-[rgb(255,202,187)] border border-custom-accent-red text-custom-accent-red hover:bg-[rgb(255,202,187)]/90 hover:text-custom-accent-red rounded-md px-3 py-1 h-auto text-sm"
           >
             Open Ticket
           </Button>
         )}
         {ticket.status === 'open' && onResolveTicket && (
           <Button
-            variant="outline"
+            variant="ghost"
             onClick={onResolveTicket}
+            className="bg-[rgb(221,226,178)] border border-[rgb(102,128,11)] text-[rgb(82,102,9)] hover:bg-[rgb(221,226,178)]/90 hover:text-[rgb(82,102,9)] rounded-md px-3 py-1 h-auto text-sm"
           >
             Resolve
           </Button>
         )}
         {ticket.status === 'resolved' && onCloseTicket && (
           <Button
-            variant="outline"
+            variant="ghost"
             onClick={onCloseTicket}
+            className="bg-[rgb(230,228,217)] border border-[rgb(111,110,105)] text-[rgb(78,77,74)] hover:bg-[rgb(230,228,217)]/90 hover:text-[rgb(78,77,74)] rounded-md px-3 py-1 h-auto text-sm"
           >
             Close
           </Button>
         )}
-        <Button
-          variant="outline"
-          onClick={() => setShowInternalNotes(true)}
-        >
-          Internal Notes
-        </Button>
       </div>
     )
   }
 
+  const getStatusBackgroundColor = (status: string) => {
+    switch (status) {
+      case 'resolved':
+        return 'bg-[rgb(221,226,178)]'
+      case 'closed':
+        return 'bg-[rgb(230,228,217)]'
+      case 'open':
+        return 'bg-[rgb(255,202,187)]'
+      case 'new':
+        return 'bg-[rgb(246,226,160)]'
+      default:
+        return 'bg-custom-background'
+    }
+  }
+
   return (
     <div className="h-full flex flex-col">
-      <header className="border-b border-custom-ui-medium">
-        <div className="flex justify-between items-center px-6 py-4">
+      <header className={`border-b border-custom-ui-medium ${getStatusBackgroundColor(ticket.status)}`}>
+        <div className="flex justify-between items-center px-6 py-2.5">
           <div>
-            <h2 className="text-lg font-semibold text-custom-text">#{ticket.id} - {ticket.subject}</h2>
-            <div className="flex gap-2 items-center mt-1">
-              <Badge variant="outline">
-                {ticket.status}
-              </Badge>
-              {renderTicketActions()}
-            </div>
+            <h2 className="text-lg font-semibold text-custom-text mb-2">{ticket.subject}</h2>
+            {renderTicketActions()}
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            className="text-custom-text-secondary hover:text-custom-text"
-          >
-            <X className="h-5 w-5" />
-          </Button>
+          <div className="flex flex-col gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              className="text-custom-text-secondary hover:text-custom-text hover:bg-transparent"
+            >
+              <X className="h-5 w-5" />
+            </Button>
+            {variant === 'agent' && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowInternalNotes(true)}
+                className="text-custom-text-secondary hover:text-custom-text hover:bg-transparent"
+              >
+                <PencilLine className="h-5 w-5" />
+              </Button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -274,7 +293,7 @@ export function ConversationPanel({
                         if (isSystemMessage) {
                           return (
                             <div key={message.id} className="flex justify-center">
-                              <div className="bg-custom-background-secondary/50 text-custom-text-secondary text-sm px-4 py-2 rounded-full">
+                              <div className="bg-custom-background-secondary border border-custom-ui-medium text-custom-text-secondary text-sm px-4 py-2 rounded-full">
                                 {message.content}
                               </div>
                             </div>
@@ -324,23 +343,12 @@ export function ConversationPanel({
                   </div>
                 ) : (
                   <div className="border-t border-custom-ui-medium bg-custom-background p-4">
-                    <div className="flex gap-2">
-                      <Textarea
-                        value={newMessage}
-                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewMessage(e.target.value)}
-                        onKeyDown={handleKeyPress}
-                        placeholder="Type your message..."
-                        className="min-h-[80px] resize-none bg-custom-background-secondary border-custom-ui-medium focus:border-custom-accent focus:ring-custom-accent"
-                      />
-                      <Button
-                        className="bg-custom-accent text-white hover:bg-custom-accent/90"
-                        size="icon"
-                        disabled={isSending || !newMessage.trim()}
-                        onClick={handleSendMessage}
-                      >
-                        <Send className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <Textarea
+                      value={newMessage}
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewMessage(e.target.value)}
+                      onKeyDown={handleKeyPress}
+                      className="min-h-[80px] resize-none bg-custom-background-secondary border-custom-ui-medium focus:border-custom-ui-medium/50 focus:ring-0"
+                    />
                   </div>
                 )}
               </div>
@@ -369,7 +377,7 @@ export function ConversationPanel({
                     if (isSystemMessage) {
                       return (
                         <div key={message.id} className="flex justify-center">
-                          <div className="bg-custom-background-secondary/50 text-custom-text-secondary text-sm px-4 py-2 rounded-full">
+                          <div className="bg-custom-background-secondary border border-custom-ui-medium text-custom-text-secondary text-sm px-4 py-2 rounded-full">
                             {message.content}
                           </div>
                         </div>
@@ -419,23 +427,12 @@ export function ConversationPanel({
               </div>
             ) : (
               <div className="border-t border-custom-ui-medium bg-custom-background p-4">
-                <div className="flex gap-2">
-                  <Textarea
-                    value={newMessage}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewMessage(e.target.value)}
-                    onKeyDown={handleKeyPress}
-                    placeholder="Type your message..."
-                    className="min-h-[80px] resize-none bg-custom-background-secondary border-custom-ui-medium focus:border-custom-accent focus:ring-custom-accent"
-                  />
-                  <Button
-                    className="bg-custom-accent text-white hover:bg-custom-accent/90"
-                    size="icon"
-                    disabled={isSending || !newMessage.trim()}
-                    onClick={handleSendMessage}
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
-                </div>
+                <Textarea
+                  value={newMessage}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewMessage(e.target.value)}
+                  onKeyDown={handleKeyPress}
+                  className="min-h-[80px] resize-none bg-custom-background-secondary border-custom-ui-medium focus:border-custom-ui-medium/50 focus:ring-0"
+                />
               </div>
             )}
           </div>
