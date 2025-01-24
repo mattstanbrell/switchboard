@@ -9,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 type Tables = Database['public']['Tables']
 type BaseFieldDefinition = Tables['field_definitions']['Row']
 type TicketField = Tables['ticket_fields']['Row']
-type FocusArea = Tables['focus_areas']['Row']
 
 interface FieldOption {
   label: string

@@ -7,8 +7,31 @@ type Tables = Database['public']['Tables']
 type Profile = Tables['profiles']['Row']
 type Team = Tables['teams']['Row']
 type FocusArea = Tables['focus_areas']['Row']
+
+interface FieldDefinition {
+  id: number
+  name: string
+  label: string
+  field_type: string
+  is_required: boolean
+  allows_multiple: boolean
+  options: Tables['field_definitions']['Row']['options']
+}
+
+interface TicketField {
+  value: string | null
+  field_definition: FieldDefinition
+}
+
 type Ticket = Tables['tickets']['Row'] & {
   focus_areas: FocusArea
+  ticket_fields: TicketField[]
+  status: 'New' | 'Open' | 'Resolved' | 'Closed'
+}
+
+// Helper function to capitalize first letter
+function capitalizeStatus(status: string): 'New' | 'Open' | 'Resolved' | 'Closed' {
+  return (status.charAt(0).toUpperCase() + status.slice(1)) as 'New' | 'Open' | 'Resolved' | 'Closed'
 }
 
 interface TeamWithRelations extends Team {
@@ -40,7 +63,7 @@ interface RawProfile {
 interface RawTicket {
   id: number
   subject: string
-  status: string
+  status: 'new' | 'open' | 'resolved' | 'closed'
   created_at: string
   focus_area_id: number | null
   customer_id: string
@@ -50,6 +73,10 @@ interface RawTicket {
   resolved_at: string | null
   closed_at: string | null
   focus_areas: FocusArea
+  ticket_fields: Array<{
+    value: string | null
+    field_definition: FieldDefinition
+  }>
 }
 
 export default async function HumanAgentPage() {
@@ -171,7 +198,8 @@ export default async function HumanAgentPage() {
 
     tickets = (ticketsData as unknown as RawTicket[]).map(ticket => ({
       ...ticket,
-      focus_areas: ticket.focus_areas
+      focus_areas: ticket.focus_areas,
+      status: capitalizeStatus(ticket.status)
     }))
   }
 

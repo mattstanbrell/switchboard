@@ -5,8 +5,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/utils/supabase/client'
-import { Badge } from "@/components/ui/badge"
-import { X, Send, PencilLine } from "lucide-react"
+import { X, PencilLine } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { RealtimeChannel } from '@supabase/supabase-js'
@@ -28,7 +27,7 @@ interface FieldDefinition {
   field_type: string
   is_required: boolean
   allows_multiple: boolean
-  options: any[] | null
+  options: Tables['field_definitions']['Row']['options']
 }
 
 interface TicketField {
@@ -61,19 +60,20 @@ export function ConversationPanel({
 }: Props) {
   const [ticket, setTicket] = useState(initialTicket)
   const [messages, setMessages] = useState<Message[]>([])
-  const [isLoading, setIsLoading] = useState(true)
   const [newMessage, setNewMessage] = useState('')
-  const [isSending, setIsSending] = useState(false)
-  const [isOpening, setIsOpening] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [otherPartyName, setOtherPartyName] = useState<string>('Unknown')
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const channelRef = useRef<RealtimeChannel | null>(null)
   const [showInternalNotes, setShowInternalNotes] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [channel, setChannel] = useState<RealtimeChannel | null>(null)
+
+  const isAgent = variant === 'agent'
+  const isCustomer = variant === 'customer'
 
   useEffect(() => {
     setTicket(initialTicket)
-  }, [initialTicket])
+  }, [initialTicket.id])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -88,7 +88,7 @@ export function ConversationPanel({
       setIsLoading(true)
       const supabase = createClient()
       
-      const { data, error } = await supabase
+      const { data, error: fetchError } = await supabase
         .from('messages')
         .select(`
           *,
@@ -99,13 +99,13 @@ export function ConversationPanel({
         .eq('ticket_id', ticket.id)
         .order('created_at', { ascending: true })
 
-      if (error) {
-        console.error('Error fetching messages:', error)
+      if (fetchError) {
+        console.error('Error fetching messages:', fetchError)
       }
 
-      if (!error && data) {
+      if (!fetchError && data) {
         // If agent view, get customer name
-        if (variant === 'agent') {
+        if (isAgent) {
           const { data: customerData } = await supabase
             .from('profiles')
             .select('full_name')
@@ -122,7 +122,7 @@ export function ConversationPanel({
 
     // Set up real-time subscription
     const supabase = createClient()
-    channelRef.current = supabase
+    const newChannel = supabase
       .channel(`messages:ticket_id=eq.${ticket.id}`)
       .on(
         'postgres_changes',
@@ -156,12 +156,14 @@ export function ConversationPanel({
       )
       .subscribe()
 
+    setChannel(newChannel)
+
     return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
+      if (channel) {
+        supabase.removeChannel(channel)
       }
     }
-  }, [ticket.id, ticket.customer_id, variant])
+  }, [ticket.id, isAgent, ticket.customer_id])
 
   useEffect(() => {
     const getCurrentUser = async () => {
@@ -175,14 +177,13 @@ export function ConversationPanel({
   const handleSendMessage = async () => {
     if (!newMessage.trim()) return
 
-    setIsSending(true)
     const supabase = createClient()
     
     try {
       const { data: profile } = await supabase.auth.getUser()
       if (!profile.user) throw new Error('Not authenticated')
 
-      const { error } = await supabase
+      const { error: sendError } = await supabase
         .from('messages')
         .insert([
           {
@@ -193,13 +194,11 @@ export function ConversationPanel({
           }
         ])
 
-      if (error) throw error
+      if (sendError) throw sendError
 
       setNewMessage('')
-    } catch (error) {
-      console.error('Failed to send message:', error)
-    } finally {
-      setIsSending(false)
+    } catch (err) {
+      console.error('Failed to send message:', err)
     }
   }
 
@@ -211,7 +210,7 @@ export function ConversationPanel({
   }
 
   const renderTicketActions = () => {
-    if (variant !== 'agent') return null
+    if (!isAgent) return null
 
     return (
       <div className="flex gap-2 items-center">
@@ -219,7 +218,6 @@ export function ConversationPanel({
           <Button
             variant="ghost"
             onClick={onOpenTicket}
-            disabled={isOpening}
             className="bg-[rgb(255,202,187)] border border-custom-accent-red text-custom-accent-red hover:bg-[rgb(255,202,187)]/90 hover:text-custom-accent-red rounded-md px-3 py-1 h-auto text-sm"
           >
             Open Ticket
@@ -248,7 +246,8 @@ export function ConversationPanel({
   }
 
   const getStatusBackgroundColor = (status: string) => {
-    switch (status) {
+    const lowercaseStatus = status.toLowerCase()
+    switch (lowercaseStatus) {
       case 'resolved':
         return 'bg-[rgb(221,226,178)]'
       case 'closed':
@@ -281,7 +280,7 @@ export function ConversationPanel({
             >
               <X className="h-5 w-5" />
             </Button>
-            {variant === 'agent' && (
+            {isAgent && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -296,7 +295,7 @@ export function ConversationPanel({
       </header>
 
       <div className="flex-1 min-h-0 flex">
-        {variant === 'agent' && showInternalNotes ? (
+        {isAgent && showInternalNotes ? (
           <ResizablePanelGroup direction="horizontal">
             <ResizablePanel defaultSize={60} minSize={30}>
               <div className="h-full flex flex-col">
@@ -329,7 +328,7 @@ export function ConversationPanel({
                             <div className={`flex gap-2 text-sm text-custom-text-secondary ${isMyMessage ? 'flex-row-reverse' : ''}`}>
                               {!isMyMessage && (
                                 <span>
-                                  {(variant === 'customer')
+                                  {isCustomer
                                     ? (message.sender?.full_name || 'Support Agent')
                                     : otherPartyName
                                   }
@@ -354,7 +353,7 @@ export function ConversationPanel({
                   </div>
                 </ScrollArea>
 
-                {variant === 'customer' && ticket.status === 'new' ? (
+                {isCustomer && ticket.status === 'new' ? (
                   <div className="border-t border-custom-ui-medium bg-custom-background p-4">
                     <Alert>
                       <AlertDescription>
@@ -413,7 +412,7 @@ export function ConversationPanel({
                         <div className={`flex gap-2 text-sm text-custom-text-secondary ${isMyMessage ? 'flex-row-reverse' : ''}`}>
                           {!isMyMessage && (
                             <span>
-                              {(variant === 'customer')
+                              {isCustomer
                                 ? (message.sender?.full_name || 'Support Agent')
                                 : otherPartyName
                               }
@@ -438,7 +437,7 @@ export function ConversationPanel({
               </div>
             </ScrollArea>
 
-            {variant === 'customer' && ticket.status === 'new' ? (
+            {isCustomer && ticket.status === 'new' ? (
               <div className="border-t border-custom-ui-medium bg-custom-background p-4">
                 <Alert>
                   <AlertDescription>

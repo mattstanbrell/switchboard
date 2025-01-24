@@ -1,16 +1,6 @@
 'use client'
 
 import type { Database } from '@/database.types'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { AgentConversationPanel } from './conversation-panel'
 import { useState, useEffect } from 'react'
 import { ResizableLayout } from '@/components/shared/resizable-layout'
@@ -19,9 +9,7 @@ import { PrioritySelect } from '@/components/priority-select'
 import {
   Select,
   SelectContent,
-  SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select"
 import { Filter } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -38,7 +26,7 @@ interface FieldDefinition {
   field_type: string
   is_required: boolean
   allows_multiple: boolean
-  options: any[] | null
+  options: Tables['field_definitions']['Row']['options']
 }
 
 interface TicketField {

@@ -3,11 +3,10 @@
 import type { Database } from '@/database.types'
 import { useState, useEffect } from 'react'
 import { FocusAreaManager } from '@/components/admin/focus-area-manager'
-import { TeamManager } from '@/components/admin/team-manager'
 import { AgentRegistration } from '@/components/admin/agent-registration'
 import { FieldDefinitionManager } from '@/components/admin/field-definition-manager'
 import { createClient } from '@/utils/supabase/client'
-import { Users, Settings, BarChart3, UserPlus, UsersRound, Target, ListPlus, UserCheck, UserX, MoreVertical, Pencil, Trash2, Search } from 'lucide-react'
+import { Users, Settings, BarChart3, UserPlus, UsersRound, Target, UserCheck, UserX, MoreVertical, Pencil, Trash2, Search } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
@@ -26,7 +25,6 @@ type Profile = Tables['profiles']['Row']
 type FocusArea = Tables['focus_areas']['Row']
 type BaseTeam = Tables['teams']['Row']
 type BaseFieldDefinition = Tables['field_definitions']['Row']
-type TicketPriority = Database['public']['Enums']['ticket_priority']
 type BaseTicket = Tables['tickets']['Row']
 
 interface FieldOption {
@@ -98,21 +96,19 @@ export default function AdminDashboard({
   const [agents, setAgents] = useState(initialAgents)
   const [teams, setTeams] = useState(initialTeams)
   const [fieldDefinitions, setFieldDefinitions] = useState(initialFieldDefinitions)
-  const [tickets, setTickets] = useState(initialTickets)
+  const [tickets] = useState(initialTickets)
   const [newTeamName, setNewTeamName] = useState('')
   const [selectedFocusAreas, setSelectedFocusAreas] = useState<number[]>([])
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null)
   const [isCreatingTeam, setIsCreatingTeam] = useState(false)
   const [isAssigningAgent, setIsAssigningAgent] = useState(false)
-  const [selectedAgentId, setSelectedAgentId] = useState<string>('')
-  const [editingTeam, setEditingTeam] = useState<TeamWithRelations | null>(null)
-  const [isEditingTeam, setIsEditingTeam] = useState(false)
-  const [isDeletingTeam, setIsDeletingTeam] = useState(false)
   const [selectedAgents, setSelectedAgents] = useState<string[]>([])
   const [isBulkAssigning, setIsBulkAssigning] = useState(false)
   const [showBulkAssignDialog, setShowBulkAssignDialog] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedInitialMembers, setSelectedInitialMembers] = useState<string[]>([])
+  const [editingTeam, setEditingTeam] = useState<TeamWithRelations | null>(null)
+  const [isEditingTeam, setIsEditingTeam] = useState(false)
 
   // Chart colors
   const statusColors = {
@@ -288,7 +284,7 @@ export default function AdminDashboard({
         teamId: agent.team_id
       }))
     })
-  }, [teams, agents])
+  }, [teams, agents, unassignedAgents])
 
   const handleCreateTeam = async () => {
     if (!newTeamName.trim()) return
@@ -394,7 +390,6 @@ export default function AdminDashboard({
       setTeams(updatedTeams)
 
       setSelectedTeamId(null)
-      setSelectedAgentId('')
       setIsAssigningAgent(false)
     } catch (error) {
       console.error('Error assigning agent:', error)
@@ -463,8 +458,6 @@ export default function AdminDashboard({
   }
 
   const handleDeleteTeam = async (teamId: number) => {
-    setIsDeletingTeam(true)
-
     try {
       const supabase = createClient()
 
@@ -497,10 +490,8 @@ export default function AdminDashboard({
       setAgents(agents.map(agent => 
         agent.team_id === teamId ? { ...agent, team_id: null } : agent
       ))
-      setIsDeletingTeam(false)
     } catch (error) {
       console.error('Error deleting team:', error)
-      setIsDeletingTeam(false)
     }
   }
 
@@ -794,10 +785,10 @@ export default function AdminDashboard({
                         }}
                         labelStyle={{ color: '#100F0F', fontWeight: 500 }}
                         formatter={(value: number) => [
-                          <span style={{ color: '#100F0F', fontWeight: 500 }}>
+                          <span key="value" style={{ color: '#100F0F', fontWeight: 500 }}>
                             {value} hours ({teamResolutionTimeData.find(t => t.hours === value)?.ticketCount} tickets)
                           </span>,
-                          <span style={{ color: '#100F0F', fontWeight: 500 }}>
+                          <span key="label" style={{ color: '#100F0F', fontWeight: 500 }}>
                             Avg. Resolution Time
                           </span>
                         ]}
