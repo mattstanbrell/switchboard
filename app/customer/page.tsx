@@ -26,7 +26,25 @@ import { CustomerConversationPanel } from '@/components/customer/conversation-pa
 import { ResizableLayout } from '@/components/shared/resizable-layout'
 
 type Tables = Database['public']['Tables']
-type Ticket = Tables['tickets']['Row']
+
+interface FieldDefinition {
+  id: number
+  name: string
+  label: string
+  field_type: string
+  is_required: boolean
+  allows_multiple: boolean
+  options: any[] | null
+}
+
+interface TicketField {
+  value: string | null
+  field_definition: FieldDefinition
+}
+
+type Ticket = Tables['tickets']['Row'] & {
+  ticket_fields: TicketField[]
+}
 type Profile = Tables['profiles']['Row']
 
 export default function CustomerPage() {
@@ -60,7 +78,21 @@ export default function CustomerPage() {
       // Fetch tickets
       const { data: ticketsData } = await supabase
         .from('tickets')
-        .select('*')
+        .select(`
+          *,
+          ticket_fields (
+            value,
+            field_definition: field_definitions (
+              id,
+              name,
+              label,
+              field_type,
+              is_required,
+              allows_multiple,
+              options
+            )
+          )
+        `)
         .order('created_at', { ascending: false })
       
       setTickets(ticketsData || [])
@@ -105,7 +137,9 @@ export default function CustomerPage() {
               }
             >
               <TableCell className="text-custom-text">#{ticket.id}</TableCell>
-              <TableCell className="text-custom-text">{ticket.subject}</TableCell>
+              <TableCell className="text-custom-text">
+                {ticket.ticket_fields?.find(f => f.field_definition.name === 'subject')?.value || 'No Subject'}
+              </TableCell>
               <TableCell>
                 <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-custom-ui-faint">
                   {ticket.status}

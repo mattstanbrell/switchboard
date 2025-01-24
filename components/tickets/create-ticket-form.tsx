@@ -20,7 +20,6 @@ interface CustomField extends Omit<BaseFieldDefinition, 'options'> {
 }
 
 export default function CreateTicketForm({ onSuccess }: { onSuccess?: () => void }) {
-  const [subject, setSubject] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [customFields, setCustomFields] = useState<CustomField[]>([])
@@ -47,7 +46,7 @@ export default function CreateTicketForm({ onSuccess }: { onSuccess?: () => void
         .from('field_definitions')
         .select('*')
         .eq('company_id', profile.company_id)
-        .order('name')
+        .order('display_order')
 
       if (fields) {
         const typedFields: CustomField[] = fields.map(field => ({
@@ -82,6 +81,16 @@ export default function CreateTicketForm({ onSuccess }: { onSuccess?: () => void
       return
     }
 
+    // Find the subject field
+    const subjectField = customFields.find(f => f.name === 'subject')
+    if (!subjectField) {
+      setError('Subject field is required but not found')
+      setIsLoading(false)
+      return
+    }
+
+    const subject = fieldValues[subjectField.id] as string
+
     try {
       // Insert the ticket
       const { data: ticket, error: insertError } = await supabase
@@ -96,12 +105,12 @@ export default function CreateTicketForm({ onSuccess }: { onSuccess?: () => void
 
       if (insertError) throw insertError
 
-      // Insert custom field values
+      // Insert custom field values (excluding subject as it's already in the tickets table)
       if (ticket) {
         const fieldEntries = Object.entries(fieldValues)
           .filter(([fieldId, value]) => {
             const field = customFields.find(f => f.id === parseInt(fieldId))
-            if (!field) return false
+            if (!field || field.name === 'subject') return false // Skip subject field
             if (field.allows_multiple) {
               return (value as string[]).length > 0
             }
@@ -160,8 +169,7 @@ export default function CreateTicketForm({ onSuccess }: { onSuccess?: () => void
         if (messageError) throw messageError
       }
 
-      // Reset form and notify parent
-      setSubject('')
+      // Reset form
       setFieldValues({})
       setIsLoading(false)
       onSuccess?.()
@@ -267,17 +275,6 @@ export default function CreateTicketForm({ onSuccess }: { onSuccess?: () => void
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="subject" className="text-custom-text">Subject</Label>
-        <Input
-          id="subject"
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          className="bg-custom-background-secondary border-custom-ui-medium focus:border-custom-accent focus:ring-custom-accent"
-          required
-        />
-      </div>
-
       {customFields.map((field) => (
         <div key={field.id} className="space-y-2">
           <Label htmlFor={`field-${field.id}`} className="text-custom-text">

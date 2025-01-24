@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Trash2, Users } from 'lucide-react'
 import { MultiSelect } from '@/components/ui/multi-select'
+import { FocusAreaPill } from "@/components/ui/focus-area-pill"
 
 type Tables = Database['public']['Tables']
 type FocusArea = Tables['focus_areas']['Row']
@@ -347,9 +348,7 @@ export function TeamManager({
               {team.team_focus_areas.map((fa) => {
                 const area = focusAreas.find(a => a.id === fa.focus_area_id)
                 return area ? (
-                  <Badge key={area.id} variant="outline">
-                    {area.name}
-                  </Badge>
+                  <FocusAreaPill key={area.id} name={area.name} variant="muted" />
                 ) : null
               })}
             </div>

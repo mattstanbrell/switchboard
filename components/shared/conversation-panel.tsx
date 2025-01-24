@@ -14,19 +14,38 @@ import { InternalNotesPanel } from "@/components/human-agent/internal-notes-pane
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 
 type Tables = Database['public']['Tables']
+
 type Message = Tables['messages']['Row'] & {
   sender?: {
     full_name: string | null
   }
 }
-type Ticket = Tables['tickets']['Row']
 
-type ConversationVariant = 'customer' | 'agent'
+interface FieldDefinition {
+  id: number
+  name: string
+  label: string
+  field_type: string
+  is_required: boolean
+  allows_multiple: boolean
+  options: any[] | null
+}
+
+interface TicketField {
+  value: string | null
+  field_definition: FieldDefinition
+}
+
+type Ticket = Tables['tickets']['Row'] & {
+  ticket_fields: TicketField[]
+}
+
+type Variant = 'agent' | 'customer'
 
 interface Props {
   ticket: Ticket
   onClose: () => void
-  variant: ConversationVariant
+  variant: Variant
   onOpenTicket?: () => void
   onResolveTicket?: () => void
   onCloseTicket?: () => void
@@ -248,7 +267,9 @@ export function ConversationPanel({
       <header className={`border-b border-custom-ui-medium ${getStatusBackgroundColor(ticket.status)}`}>
         <div className="flex justify-between items-center px-6 py-2.5">
           <div>
-            <h2 className="text-lg font-semibold text-custom-text mb-2">{ticket.subject}</h2>
+            <h2 className="text-lg font-semibold text-custom-text mb-2">
+              {ticket.ticket_fields?.find(f => f.field_definition.name === 'subject')?.value || 'No Subject'}
+            </h2>
             {renderTicketActions()}
           </div>
           <div className="flex flex-col gap-1">

@@ -283,6 +283,7 @@ CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
     AS $$
 DECLARE
   v_company_id UUID;
+  v_next_order INTEGER;
 BEGIN
   -- If the user signed up to create a new company (i.e., "Register Company"):
   IF (NEW.raw_user_meta_data->>'company_name') IS NOT NULL THEN
@@ -299,6 +300,13 @@ BEGIN
       NEW.raw_user_meta_data->>'full_name',
       v_company_id
     );
+
+    -- 3. Create default field definitions
+    INSERT INTO public.field_definitions 
+      (company_id, name, label, field_type, is_required, display_order)
+    VALUES
+      (v_company_id, 'subject', 'Subject', 'text', true, 1),
+      (v_company_id, 'content', 'Content', 'text', true, 2);
 
   -- If role is specified in metadata, use that role (for human agents)
   ELSIF (NEW.raw_user_meta_data->>'role') IS NOT NULL THEN
@@ -423,7 +431,8 @@ CREATE TABLE IF NOT EXISTS "public"."field_definitions" (
     "field_type" "text" NOT NULL,
     "is_required" boolean DEFAULT false NOT NULL,
     "options" "jsonb"[] DEFAULT '{}'::"jsonb"[],
-    "allows_multiple" boolean DEFAULT false NOT NULL
+    "allows_multiple" boolean DEFAULT false NOT NULL,
+    "display_order" integer NOT NULL
 );
 
 ALTER TABLE "public"."field_definitions" OWNER TO "postgres";
@@ -538,7 +547,6 @@ ALTER TABLE "public"."ticket_fields" OWNER TO "postgres";
 CREATE TABLE IF NOT EXISTS "public"."tickets" (
     "id" bigint NOT NULL,
     "created_at" timestamp without time zone DEFAULT "now"() NOT NULL,
-    "subject" "text" NOT NULL,
     "status" "text" DEFAULT 'new'::"text" NOT NULL,
     "customer_id" "uuid" NOT NULL,
     "human_agent_id" "uuid",
@@ -603,6 +611,8 @@ ALTER TABLE ONLY "public"."ticket_fields"
 
 ALTER TABLE ONLY "public"."tickets"
     ADD CONSTRAINT "tickets_pkey" PRIMARY KEY ("id");
+
+CREATE INDEX "idx_field_definitions_company_order" ON "public"."field_definitions" USING "btree" ("company_id", "display_order");
 
 CREATE OR REPLACE TRIGGER "before_ticket_change" BEFORE INSERT OR UPDATE OF "focus_area_id" ON "public"."tickets" FOR EACH ROW EXECUTE FUNCTION "public"."assign_ticket_to_team"();
 
