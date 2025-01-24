@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select"
 import { Filter } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
+import { StatusBadge, Status } from '@/components/status-badge'
 
 type Tables = Database['public']['Tables']
 
@@ -32,6 +33,7 @@ export type FocusArea = Tables['focus_areas']['Row']
 export type Ticket = Tables['tickets']['Row'] & {
   focus_areas: FocusArea
   priority: 'Low' | 'Medium' | 'High'
+  status: 'New' | 'Open' | 'Resolved' | 'Closed'
 }
 export type Team = Tables['teams']['Row'] & {
   team_focus_areas: Array<{
@@ -58,12 +60,12 @@ export function HumanAgentDashboard({ profile, tickets }: Props) {
 
   // Get unique focus areas and statuses
   const uniqueFocusAreas = Array.from(new Set(tickets.map(t => t.focus_areas.name)))
-  const uniqueStatuses = Array.from(new Set(tickets.map(t => t.status)))
+  const uniqueStatuses = Array.from(new Set(tickets.map(t => t.status.toLowerCase()))) as Status[]
 
   // Filter tickets based on selected filters
   const filteredTickets = tickets.filter(ticket => {
     const focusAreaMatch = selectedFocusAreas.length === 0 || selectedFocusAreas.includes(ticket.focus_areas.name)
-    const statusMatch = selectedStatuses.length === 0 || selectedStatuses.includes(ticket.status)
+    const statusMatch = selectedStatuses.length === 0 || selectedStatuses.includes(ticket.status.toLowerCase())
     return focusAreaMatch && statusMatch
   })
 
@@ -72,8 +74,7 @@ export function HumanAgentDashboard({ profile, tickets }: Props) {
       <div className="relative flex-1 overflow-auto">
         <div className="mx-auto max-w-[1400px]">
           <div className="sticky top-0 h-10 bg-custom-background border-b border-custom-ui-medium">
-            <div className="grid grid-cols-10 h-full px-6">
-              <div className="col-span-1 flex items-center font-medium text-custom-text">ID</div>
+            <div className="grid grid-cols-9 h-full px-6">
               <div className="col-span-2 flex items-center font-medium text-custom-text">Subject</div>
               <div className="col-span-2 flex items-center font-medium text-custom-text gap-2">
                 Focus Area
@@ -156,28 +157,23 @@ export function HumanAgentDashboard({ profile, tickets }: Props) {
                     selectedTicket?.id === ticket.id && "bg-custom-ui-faint hover:bg-custom-ui-faint"
                   )}
                 >
-                  <div className="grid grid-cols-10 px-6 py-4">
-                    <div className="col-span-1 flex items-center text-custom-text">
-                      #{ticket.id}
-                    </div>
+                  <div className="grid grid-cols-9 px-6 py-4">
                     <div className="col-span-2 flex items-center text-custom-text">
                       {ticket.subject}
                     </div>
                     <div className="col-span-2 flex items-center">
-                      <Badge variant="secondary">
+                      <div className="bg-custom-background-secondary border border-custom-ui-medium text-custom-text-secondary text-xs px-3 py-1 rounded-full">
                         {ticket.focus_areas.name}
-                      </Badge>
+                      </div>
                     </div>
                     <div className="col-span-2 flex items-center">
                       <PrioritySelect ticket={ticket} />
                     </div>
                     <div className="col-span-2 flex items-center">
-                      <Badge variant="outline">
-                        {ticket.status}
-                      </Badge>
+                      <StatusBadge status={ticket.status.toLowerCase() as Status} />
                     </div>
-                    <div className="col-span-1 flex items-center text-custom-text-secondary">
-                      {new Date(ticket.created_at).toISOString().split('T')[0]}
+                    <div className="col-span-1 flex items-center text-custom-text-secondary text-sm">
+                      {new Date(ticket.created_at).toISOString().split('T')[0].replace(/-/g, '/')}
                     </div>
                   </div>
                 </div>
