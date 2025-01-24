@@ -348,7 +348,7 @@ export function TeamManager({
               {team.team_focus_areas.map((fa) => {
                 const area = focusAreas.find(a => a.id === fa.focus_area_id)
                 return area ? (
-                  <FocusAreaPill key={area.id} name={area.name} variant="muted" />
+                  <FocusAreaPill key={area.id} name={area.name} />
                 ) : null
               })}
             </div>

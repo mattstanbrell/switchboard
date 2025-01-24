@@ -6,7 +6,26 @@ import { createClient } from '@/utils/supabase/client'
 import { ConversationPanel } from '@/components/shared/conversation-panel'
 
 type Tables = Database['public']['Tables']
-type Ticket = Tables['tickets']['Row']
+
+interface FieldDefinition {
+  id: number
+  name: string
+  label: string
+  field_type: string
+  is_required: boolean
+  allows_multiple: boolean
+  options: Tables['field_definitions']['Row']['options']
+}
+
+interface TicketField {
+  value: string | null
+  field_definition: FieldDefinition
+}
+
+type Ticket = Tables['tickets']['Row'] & {
+  ticket_fields: TicketField[]
+  status: 'New' | 'Open' | 'Resolved' | 'Closed'
+}
 
 interface Props {
   ticket: Ticket
@@ -27,20 +46,45 @@ export function AgentConversationPanel({ ticket: initialTicket, onClose }: Props
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      const { data, error } = await supabase
+      // First update the ticket
+      const { error: updateError } = await supabase
         .from('tickets')
         .update({ 
           status: 'open',
           human_agent_id: user.id 
         })
         .eq('id', ticket.id)
-        .select()
+
+      if (updateError) throw updateError
+
+      // Then fetch the complete ticket data
+      const { data: updatedTicket, error: fetchError } = await supabase
+        .from('tickets')
+        .select(`
+          *,
+          ticket_fields (
+            value,
+            field_definition: field_definitions (
+              id,
+              name,
+              label,
+              field_type,
+              is_required,
+              allows_multiple,
+              options
+            )
+          )
+        `)
+        .eq('id', ticket.id)
         .single()
 
-      if (error) throw error
+      if (fetchError) throw fetchError
 
-      if (data) {
-        setTicket(data)
+      if (updatedTicket) {
+        setTicket({
+          ...updatedTicket,
+          status: 'Open' as const
+        })
         
         // Add system message
         await supabase
@@ -64,20 +108,45 @@ export function AgentConversationPanel({ ticket: initialTicket, onClose }: Props
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      const { data, error } = await supabase
+      // First update the ticket
+      const { error: updateError } = await supabase
         .from('tickets')
         .update({ 
           status: 'resolved',
           resolved_at: new Date().toISOString()
         })
         .eq('id', ticket.id)
-        .select()
+
+      if (updateError) throw updateError
+
+      // Then fetch the complete ticket data
+      const { data: updatedTicket, error: fetchError } = await supabase
+        .from('tickets')
+        .select(`
+          *,
+          ticket_fields (
+            value,
+            field_definition: field_definitions (
+              id,
+              name,
+              label,
+              field_type,
+              is_required,
+              allows_multiple,
+              options
+            )
+          )
+        `)
+        .eq('id', ticket.id)
         .single()
 
-      if (error) throw error
+      if (fetchError) throw fetchError
 
-      if (data) {
-        setTicket(data)
+      if (updatedTicket) {
+        setTicket({
+          ...updatedTicket,
+          status: 'Resolved' as const
+        })
         
         // Add system message
         await supabase
@@ -114,20 +183,45 @@ export function AgentConversationPanel({ ticket: initialTicket, onClose }: Props
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      const { data, error } = await supabase
+      // First update the ticket
+      const { error: updateError } = await supabase
         .from('tickets')
         .update({ 
           status: 'closed',
           closed_at: new Date().toISOString()
         })
         .eq('id', ticket.id)
-        .select()
+
+      if (updateError) throw updateError
+
+      // Then fetch the complete ticket data
+      const { data: updatedTicket, error: fetchError } = await supabase
+        .from('tickets')
+        .select(`
+          *,
+          ticket_fields (
+            value,
+            field_definition: field_definitions (
+              id,
+              name,
+              label,
+              field_type,
+              is_required,
+              allows_multiple,
+              options
+            )
+          )
+        `)
+        .eq('id', ticket.id)
         .single()
 
-      if (error) throw error
+      if (fetchError) throw fetchError
 
-      if (data) {
-        setTicket(data)
+      if (updatedTicket) {
+        setTicket({
+          ...updatedTicket,
+          status: 'Closed' as const
+        })
         
         // Add system message
         await supabase

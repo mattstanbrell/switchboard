@@ -25,7 +25,6 @@ export function InternalNotesPanel({ ticketId, onClose }: Props) {
   const [notes, setNotes] = useState<InternalNote[]>([])
   const [newNoteContent, setNewNoteContent] = useState('')
   const [isLoading, setIsLoading] = useState(true)
-  const [isSending, setIsSending] = useState(false)
 
   useEffect(() => {
     const loadNotes = async () => {
@@ -121,7 +120,6 @@ export function InternalNotesPanel({ ticketId, onClose }: Props) {
   const handleAddNote = async () => {
     if (!newNoteContent.trim()) return
 
-    setIsSending(true)
     const supabase = createClient()
     
     try {
@@ -143,8 +141,6 @@ export function InternalNotesPanel({ ticketId, onClose }: Props) {
       setNewNoteContent('')
     } catch (error) {
       console.error('Failed to add note:', error)
-    } finally {
-      setIsSending(false)
     }
   }
 

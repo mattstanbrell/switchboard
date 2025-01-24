@@ -1,6 +1,6 @@
 'use client'
 
-import type { Database } from '@/database.types'
+import type { Database, Json } from '@/database.types'
 import { createClient } from '@/utils/supabase/client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -19,26 +19,32 @@ import { ResizableLayout } from '@/components/shared/resizable-layout'
 import { cn } from '@/lib/utils'
 
 type Tables = Database['public']['Tables']
+type Profile = Tables['profiles']['Row']
 
-interface FieldDefinition {
+interface TicketFieldDefinition {
   id: number
   name: string
   label: string
   field_type: string
   is_required: boolean
   allows_multiple: boolean
-  options: any[] | null
+  options: Json[] | null
 }
 
 interface TicketField {
   value: string | null
-  field_definition: FieldDefinition
+  field_definition: TicketFieldDefinition
+}
+
+// Helper function to capitalize first letter
+function capitalizeStatus(status: string): 'New' | 'Open' | 'Resolved' | 'Closed' {
+  return (status.charAt(0).toUpperCase() + status.slice(1)) as 'New' | 'Open' | 'Resolved' | 'Closed'
 }
 
 type Ticket = Tables['tickets']['Row'] & {
   ticket_fields: TicketField[]
+  status: 'New' | 'Open' | 'Resolved' | 'Closed'
 }
-type Profile = Tables['profiles']['Row']
 
 export default function CustomerPage() {
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -88,7 +94,13 @@ export default function CustomerPage() {
         `)
         .order('created_at', { ascending: false })
       
-      setTickets(ticketsData || [])
+      // Transform the tickets data to ensure status is capitalized
+      const transformedTickets = (ticketsData || []).map(ticket => ({
+        ...ticket,
+        status: capitalizeStatus(ticket.status)
+      }))
+      
+      setTickets(transformedTickets as Ticket[])
       setIsLoading(false)
     }
 
@@ -128,7 +140,10 @@ export default function CustomerPage() {
           tickets.map((ticket) => (
             <div 
               key={ticket.id}
-              onClick={() => setSelectedTicket(ticket)}
+              onClick={() => {
+                // The ticket already has the correct status capitalization from the initial fetch
+                setSelectedTicket(ticket)
+              }}
               className={cn(
                 "w-full border-b border-custom-ui-medium hover:bg-custom-background-secondary transition-colors cursor-pointer",
                 selectedTicket?.id === ticket.id && "bg-custom-ui-faint hover:bg-custom-ui-faint"
