@@ -47,7 +47,7 @@ export function AgentConversationPanel({ ticket: initialTicket, onClose }: Props
           .from('messages')
           .insert({
             ticket_id: ticket.id,
-            content: 'Ticket opened by support agent',
+            content: 'Ticket opened by support agent.',
             sender_id: user.id,
             type: 'system'
           })
@@ -134,7 +134,7 @@ export function AgentConversationPanel({ ticket: initialTicket, onClose }: Props
           .from('messages')
           .insert({
             ticket_id: ticket.id,
-            content: 'Ticket closed',
+            content: 'Ticket closed.',
             sender_id: user.id,
             type: 'system'
           })

@@ -98,8 +98,7 @@ ALTER FUNCTION "public"."assign_ticket_to_team"() OWNER TO "postgres";
 CREATE OR REPLACE FUNCTION "public"."close_resolved_ticket"("ticket_id_param" bigint, "agent_id_param" "uuid", "job_name" "text") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
-    AS $$
-DECLARE
+    AS $$DECLARE
   last_message_time timestamptz;
   resolved_time timestamptz;
   ticket_exists boolean;
@@ -156,7 +155,7 @@ BEGIN
         type
       ) VALUES (
         ticket_id_param,
-        'Ticket automatically closed due to no response',
+        'Ticket automatically closed due to no response.',
         agent_id_param,
         'system'
       );
@@ -183,8 +182,7 @@ BEGIN
   END;
 
   RAISE LOG '=== FINISHED CLOSE_RESOLVED_TICKET ===';
-END;
-$$;
+END;$$;
 
 ALTER FUNCTION "public"."close_resolved_ticket"("ticket_id_param" bigint, "agent_id_param" "uuid", "job_name" "text") OWNER TO "postgres";
 
@@ -862,6 +860,8 @@ ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."internal_notes";
 ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."messages";
 
 ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."profiles";
+
+ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."tickets";
 
 GRANT USAGE ON SCHEMA "public" TO "postgres";
 GRANT USAGE ON SCHEMA "public" TO "anon";

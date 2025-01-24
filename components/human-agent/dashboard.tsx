@@ -12,7 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { AgentConversationPanel } from './conversation-panel'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ResizableLayout } from '@/components/shared/resizable-layout'
 import { cn } from '@/lib/utils'
 import { PrioritySelect } from '@/components/priority-select'
@@ -26,6 +26,7 @@ import {
 import { Filter } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { StatusBadge, Status } from '@/components/status-badge'
+import { createClient } from '@/utils/supabase/client'
 
 type Tables = Database['public']['Tables']
 
@@ -50,13 +51,57 @@ interface Props {
   tickets: Ticket[]
 }
 
-export function HumanAgentDashboard({ profile, tickets }: Props) {
+export function HumanAgentDashboard({ profile, tickets: initialTickets }: Props) {
   const team = profile.teams
+  const [tickets, setTickets] = useState(initialTickets)
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
   const [selectedFocusAreas, setSelectedFocusAreas] = useState<string[]>([])
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([])
   const [focusAreaOpen, setFocusAreaOpen] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
+
+  useEffect(() => {
+    const supabase = createClient()
+    
+    // Set up real-time subscription for ticket updates
+    const channel = supabase
+      .channel('tickets-channel')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'tickets'
+        },
+        async (payload) => {
+          // Fetch the complete ticket data including focus_areas
+          const { data: updatedTicket } = await supabase
+            .from('tickets')
+            .select(`
+              *,
+              focus_areas (*)
+            `)
+            .eq('id', payload.new.id)
+            .single()
+
+          if (updatedTicket) {
+            // Update tickets list
+            setTickets(prev => prev.map(t => 
+              t.id === updatedTicket.id ? (updatedTicket as Ticket) : t
+            ))
+            // Update selected ticket if it's the one that changed
+            if (selectedTicket?.id === updatedTicket.id) {
+              setSelectedTicket(updatedTicket as Ticket)
+            }
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [selectedTicket?.id])
 
   // Get unique focus areas and statuses
   const uniqueFocusAreas = Array.from(new Set(tickets.map(t => t.focus_areas.name)))
@@ -72,11 +117,11 @@ export function HumanAgentDashboard({ profile, tickets }: Props) {
   const ticketTable = (
     <div className="h-full flex flex-col">
       <div className="relative flex-1 overflow-auto">
-        <div className="mx-auto max-w-[1400px]">
-          <div className="sticky top-0 h-10 bg-custom-background border-b border-custom-ui-medium">
+        <div className="sticky top-0 h-10 bg-custom-background-secondary border-b border-custom-ui-medium w-full">
+          <div className="mx-auto max-w-[1400px] h-full">
             <div className="grid grid-cols-9 h-full px-6">
-              <div className="col-span-2 flex items-center font-medium text-custom-text">Subject</div>
-              <div className="col-span-2 flex items-center font-medium text-custom-text gap-2">
+              <div className="col-span-2 flex items-center font-semibold text-custom-text text-xs uppercase">Subject</div>
+              <div className="col-span-2 flex items-center font-semibold text-custom-text text-xs uppercase gap-2">
                 Focus Area
                 <Select open={focusAreaOpen} onOpenChange={setFocusAreaOpen}>
                   <SelectTrigger className="h-7 w-7 p-0 border-0 shadow-none bg-transparent hover:bg-transparent focus:ring-0 focus:ring-offset-0 [&>span]:hidden [&>svg:not(.filter-icon)]:hidden">
@@ -107,8 +152,8 @@ export function HumanAgentDashboard({ profile, tickets }: Props) {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="col-span-2 flex items-center font-medium text-custom-text">Priority</div>
-              <div className="col-span-2 flex items-center font-medium text-custom-text gap-2">
+              <div className="col-span-2 flex items-center font-semibold text-custom-text text-xs uppercase">Priority</div>
+              <div className="col-span-2 flex items-center font-semibold text-custom-text text-xs uppercase gap-2">
                 Status
                 <Select open={statusOpen} onOpenChange={setStatusOpen}>
                   <SelectTrigger className="h-7 w-7 p-0 border-0 shadow-none bg-transparent hover:bg-transparent focus:ring-0 focus:ring-offset-0 [&>span]:hidden [&>svg:not(.filter-icon)]:hidden">
@@ -139,48 +184,52 @@ export function HumanAgentDashboard({ profile, tickets }: Props) {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="col-span-1 flex items-center font-medium text-custom-text">Created</div>
+              <div className="col-span-1 flex items-center font-semibold text-custom-text text-xs uppercase">Created</div>
             </div>
           </div>
-          <div>
-            {filteredTickets.length === 0 ? (
+        </div>
+        {filteredTickets.length === 0 ? (
+          <div className="w-full bg-custom-background border-b border-custom-ui-medium">
+            <div className="mx-auto max-w-[1400px]">
               <div className="px-6 py-4 text-center text-custom-text-secondary">
                 No tickets match the selected filters.
               </div>
-            ) : (
-              filteredTickets.map((ticket) => (
-                <div 
-                  key={ticket.id}
-                  onClick={() => setSelectedTicket(ticket)}
-                  className={cn(
-                    "border-b border-custom-ui-medium hover:bg-custom-background-secondary transition-colors cursor-pointer",
-                    selectedTicket?.id === ticket.id && "bg-custom-ui-faint hover:bg-custom-ui-faint"
-                  )}
-                >
-                  <div className="grid grid-cols-9 px-6 py-4">
-                    <div className="col-span-2 flex items-center text-custom-text">
-                      {ticket.subject}
-                    </div>
-                    <div className="col-span-2 flex items-center">
-                      <div className="bg-custom-background-secondary border border-custom-ui-medium text-custom-text-secondary text-xs px-3 py-1 rounded-full">
-                        {ticket.focus_areas.name}
-                      </div>
-                    </div>
-                    <div className="col-span-2 flex items-center">
-                      <PrioritySelect ticket={ticket} />
-                    </div>
-                    <div className="col-span-2 flex items-center">
-                      <StatusBadge status={ticket.status.toLowerCase() as Status} />
-                    </div>
-                    <div className="col-span-1 flex items-center text-custom-text-secondary text-sm">
-                      {new Date(ticket.created_at).toISOString().split('T')[0].replace(/-/g, '/')}
+            </div>
+          </div>
+        ) : (
+          filteredTickets.map((ticket) => (
+            <div 
+              key={ticket.id}
+              onClick={() => setSelectedTicket(ticket)}
+              className={cn(
+                "w-full border-b border-custom-ui-medium hover:bg-custom-background-secondary transition-colors cursor-pointer",
+                selectedTicket?.id === ticket.id && "bg-custom-ui-faint hover:bg-custom-ui-faint"
+              )}
+            >
+              <div className="mx-auto max-w-[1400px]">
+                <div className="grid grid-cols-9 px-6 py-4">
+                  <div className="col-span-2 flex items-center text-custom-text-secondary">
+                    {ticket.subject}
+                  </div>
+                  <div className="col-span-2 flex items-center">
+                    <div className="bg-custom-background-secondary border border-custom-ui-medium text-custom-text-secondary text-xs px-3 py-1 rounded-full">
+                      {ticket.focus_areas.name}
                     </div>
                   </div>
+                  <div className="col-span-2 flex items-center">
+                    <PrioritySelect ticket={ticket} />
+                  </div>
+                  <div className="col-span-2 flex items-center">
+                    <StatusBadge status={ticket.status.toLowerCase() as Status} />
+                  </div>
+                  <div className="col-span-1 flex items-center text-custom-text-secondary text-sm">
+                    {new Date(ticket.created_at).toISOString().split('T')[0].replace(/-/g, '/')}
+                  </div>
                 </div>
-              ))
-            )}
-          </div>
-        </div>
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   )
