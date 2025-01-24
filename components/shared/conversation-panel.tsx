@@ -212,9 +212,12 @@ export function ConversationPanel({
   const renderTicketActions = () => {
     if (!isAgent) return null
 
+    // Convert status to lowercase for comparison
+    const status = ticket.status.toLowerCase()
+
     return (
       <div className="flex gap-2 items-center">
-        {ticket.status === 'new' && onOpenTicket && (
+        {status === 'new' && onOpenTicket && (
           <Button
             variant="ghost"
             onClick={onOpenTicket}
@@ -223,7 +226,7 @@ export function ConversationPanel({
             Open Ticket
           </Button>
         )}
-        {ticket.status === 'open' && onResolveTicket && (
+        {status === 'open' && onResolveTicket && (
           <Button
             variant="ghost"
             onClick={onResolveTicket}
@@ -232,7 +235,7 @@ export function ConversationPanel({
             Resolve
           </Button>
         )}
-        {ticket.status === 'resolved' && onCloseTicket && (
+        {status === 'resolved' && onCloseTicket && (
           <Button
             variant="ghost"
             onClick={onCloseTicket}
