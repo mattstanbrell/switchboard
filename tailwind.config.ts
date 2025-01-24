@@ -8,6 +8,9 @@ export default {
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
+    fontFamily: {
+      sans: ['-apple-system', 'BlinkMacSystemFont', 'Inter', 'IBM Plex Sans', 'Segoe UI', 'Helvetica', 'Arial', 'sans-serif'],
+    },
   	extend: {
   		colors: {
   			// Custom theme colors

@@ -71,7 +71,7 @@ export function FocusAreaManager({ initialFocusAreas, companyId, onUpdate }: Pro
   }
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-2xl">
       <div>
         <h2 className="text-2xl font-semibold mb-4">Focus Areas</h2>
         <p className="text-muted-foreground mb-6">
@@ -79,35 +79,35 @@ export function FocusAreaManager({ initialFocusAreas, companyId, onUpdate }: Pro
         </p>
       </div>
 
-      <form onSubmit={handleAddArea} className="flex gap-4 items-start">
-        <div className="flex-1">
-          <Input
-            placeholder="Enter new focus area name"
-            value={newAreaName}
-            onChange={(e) => setNewAreaName(e.target.value)}
-            disabled={isLoading}
-          />
-        </div>
+      <form onSubmit={handleAddArea} className="flex gap-4 items-start mb-6">
+        <Input
+          placeholder="Enter new focus area name"
+          value={newAreaName}
+          onChange={(e) => setNewAreaName(e.target.value)}
+          disabled={isLoading}
+          className="w-[300px]"
+        />
         <Button type="submit" disabled={isLoading || !newAreaName.trim()}>
           Add Area
         </Button>
       </form>
 
       {error && (
-        <p className="text-destructive text-sm">{error}</p>
+        <p className="text-destructive text-sm mb-4">{error}</p>
       )}
 
-      <div className="space-y-2">
+      <div className="flex flex-wrap gap-2">
         {focusAreas.map((area) => (
           <div 
             key={area.id}
-            className="flex items-center justify-between p-3 bg-muted rounded-lg"
+            className="inline-flex items-center gap-2 px-3 py-2 bg-muted rounded-lg group"
           >
             <span>{area.name}</span>
             <Button
               variant="ghost"
               size="icon"
               onClick={() => handleDeleteArea(area.id)}
+              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
             >
               <Trash2 className="h-4 w-4" />
             </Button>
