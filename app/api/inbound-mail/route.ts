@@ -20,13 +20,28 @@ export async function POST(request: Request) {
     )
     
     // Extract and validate email content from form data
-    const fromEmail = formData.get('from')
-    console.log('From email (raw):', fromEmail)
-    console.log('From email type:', typeof fromEmail)
+    const fromHeader = formData.get('from')
+    console.log('From header (raw):', fromHeader)
     
-    if (!fromEmail || typeof fromEmail !== 'string') {
-      console.error('Invalid from email:', fromEmail)
-      throw new Error('Missing or invalid from email')
+    if (!fromHeader || typeof fromHeader !== 'string') {
+      console.error('Invalid from header:', fromHeader)
+      throw new Error('Missing or invalid from header')
+    }
+
+    // Parse email and name from the From header
+    const emailMatch = fromHeader.match(/<(.+?)>/)
+    const fromEmail = emailMatch ? emailMatch[1] : fromHeader
+    const nameMatch = fromHeader.match(/^([^<]+?)\s*</)
+    const fullName = nameMatch ? nameMatch[1].trim() : fromEmail.split('@')[0]
+
+    console.log('Parsed sender info:', {
+      fromEmail,
+      fullName
+    })
+
+    if (!fromEmail.includes('@')) {
+      console.error('Invalid email format:', fromEmail)
+      throw new Error('Invalid email format')
     }
 
     const subject = formData.get('subject')?.toString() || ''
@@ -35,6 +50,7 @@ export async function POST(request: Request) {
     
     console.log('Parsed email content:', {
       fromEmail,
+      fullName,
       subject: subject || '(empty)',
       hasText: !!text,
       hasHtml: !!html
@@ -74,7 +90,7 @@ export async function POST(request: Request) {
         email: fromEmail,
         email_confirm: true,
         user_metadata: {
-          full_name: fromEmail.split('@')[0],
+          full_name: fullName,
           role: 'customer',
           company_id: company.id
         }
