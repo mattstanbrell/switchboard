@@ -3,7 +3,9 @@ import { createClient } from '@supabase/supabase-js'
 
 export async function POST(request: Request) {
   try {
+    console.log('=== INBOUND EMAIL PROCESSING STARTED ===')
     const formData = await request.formData()
+    console.log('Form data received:', Object.fromEntries(formData.entries()))
     
     // Create admin client
     const supabase = createClient(
@@ -19,26 +21,41 @@ export async function POST(request: Request) {
     
     // Extract and validate email content from form data
     const fromEmail = formData.get('from')
+    console.log('From email (raw):', fromEmail)
+    console.log('From email type:', typeof fromEmail)
+    
     if (!fromEmail || typeof fromEmail !== 'string') {
+      console.error('Invalid from email:', fromEmail)
       throw new Error('Missing or invalid from email')
     }
 
     const subject = formData.get('subject')?.toString() || ''
     const text = formData.get('text')?.toString() || ''
     const html = formData.get('html')?.toString() || ''
+    
+    console.log('Parsed email content:', {
+      fromEmail,
+      subject: subject || '(empty)',
+      hasText: !!text,
+      hasHtml: !!html
+    })
 
-    // Get first company (TODO: implement proper routing)
+    // Get first company
+    console.log('Fetching company...')
     const { data: company } = await supabase
       .from('companies')
       .select('id')
       .limit(1)
       .single()
 
+    console.log('Company found:', company)
+
     if (!company) {
       throw new Error('No company found to handle the email')
     }
 
     // Check if user exists
+    console.log('Checking for existing profile...')
     const { data: existingProfile } = await supabase
       .from('profiles')
       .select('id')
@@ -46,9 +63,12 @@ export async function POST(request: Request) {
       .eq('company_id', company.id)
       .single()
 
+    console.log('Existing profile:', existingProfile)
+
     let customerId: string
 
     if (!existingProfile) {
+      console.log('No existing profile found, creating new user...')
       // Create auth user
       const { data: authData, error: signUpError } = await supabase.auth.admin.createUser({
         email: fromEmail,
@@ -60,15 +80,36 @@ export async function POST(request: Request) {
         }
       })
 
-      if (signUpError) throw signUpError
-      if (!authData.user) throw new Error('Failed to create user')
+      if (signUpError) {
+        console.error('Error creating auth user:', signUpError)
+        throw signUpError
+      }
+      if (!authData.user) {
+        console.error('No user data returned')
+        throw new Error('Failed to create user')
+      }
+
+      console.log('Auth user created:', {
+        id: authData.user.id,
+        email: authData.user.email
+      })
 
       customerId = authData.user.id
     } else {
+      console.log('Using existing profile')
       customerId = existingProfile.id
     }
 
     // Process the email
+    console.log('Processing email with params:', {
+      customer_id: customerId,
+      company_id: company.id,
+      from_email: fromEmail,
+      has_subject: !!subject,
+      has_text: !!text,
+      has_html: !!html
+    })
+    
     const { data, error } = await supabase
       .rpc('process_inbound_email', {
         customer_id: customerId,
@@ -79,7 +120,13 @@ export async function POST(request: Request) {
         html_content: html
       })
 
-    if (error) throw error
+    if (error) {
+      console.error('Error processing email:', error)
+      throw error
+    }
+
+    console.log('Email processed successfully:', data)
+    console.log('=== INBOUND EMAIL PROCESSING COMPLETED ===')
 
     return NextResponse.json(data)
   } catch (error) {
