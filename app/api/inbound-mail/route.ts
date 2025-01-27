@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import Parse from '@sendgrid/inbound-mail-parser'
 
 export async function POST(request: Request) {
   try {
@@ -18,14 +19,23 @@ export async function POST(request: Request) {
         }
       }
     )
-    
-    // Extract and validate email content from form data
-    const fromHeader = formData.get('from')
-    console.log('From header (raw):', fromHeader)
-    
-    if (!fromHeader || typeof fromHeader !== 'string') {
-      console.error('Invalid from header:', fromHeader)
-      throw new Error('Missing or invalid from header')
+
+    // Initialize parser with the fields we want to extract
+    const parser = new Parse({
+      keys: ['from', 'subject', 'text', 'html']
+    }, {
+      body: Object.fromEntries(formData.entries())
+    })
+
+    // Extract key values from the email
+    const emailData = parser.keyValues()
+    console.log('Parsed email data:', emailData)
+
+    // Parse sender info from the From header
+    const fromHeader = emailData.from
+    if (!fromHeader) {
+      console.error('Missing from header')
+      throw new Error('Missing from header')
     }
 
     // Parse email and name from the From header
@@ -43,18 +53,6 @@ export async function POST(request: Request) {
       console.error('Invalid email format:', fromEmail)
       throw new Error('Invalid email format')
     }
-
-    const subject = formData.get('subject')?.toString() || ''
-    const text = formData.get('text')?.toString() || ''
-    const html = formData.get('html')?.toString() || ''
-    
-    console.log('Parsed email content:', {
-      fromEmail,
-      fullName,
-      subject: subject || '(empty)',
-      hasText: !!text,
-      hasHtml: !!html
-    })
 
     // Get first company
     console.log('Fetching company...')
@@ -121,9 +119,9 @@ export async function POST(request: Request) {
       customer_id: customerId,
       target_company_id: company.id,
       from_email: fromEmail,
-      has_subject: !!subject,
-      has_text: !!text,
-      has_html: !!html
+      has_subject: !!emailData.subject,
+      has_text: !!emailData.text,
+      has_html: !!emailData.html
     })
     
     const { data, error } = await supabase
@@ -131,9 +129,9 @@ export async function POST(request: Request) {
         customer_id: customerId,
         target_company_id: company.id,
         from_email: fromEmail,
-        subject,
-        text_content: text,
-        html_content: html
+        subject: emailData.subject || '',
+        text_content: emailData.text || '',
+        html_content: emailData.html || ''
       })
 
     if (error) {
