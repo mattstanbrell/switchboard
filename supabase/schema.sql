@@ -278,6 +278,106 @@ $$;
 
 ALTER FUNCTION "public"."get_user_role"() OWNER TO "postgres";
 
+CREATE OR REPLACE FUNCTION "public"."handle_inbound_email"("from_email" "text", "subject" "text", "text_content" "text", "html_content" "text") RETURNS "json"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_company_id uuid;
+  v_customer_id uuid;
+  v_ticket_id bigint;
+  v_subject_field_id bigint;
+BEGIN
+  -- Get the first company in the system (TODO: implement proper routing)
+  SELECT id INTO v_company_id
+  FROM companies
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'No company found to handle the email';
+  END IF;
+
+  -- Try to find existing customer profile
+  SELECT id INTO v_customer_id
+  FROM profiles
+  WHERE email = from_email
+    AND company_id = v_company_id;
+
+  -- If no profile exists, create one
+  IF NOT FOUND THEN
+    v_customer_id := gen_random_uuid();
+    
+    INSERT INTO profiles (
+      id,
+      role,
+      company_id,
+      email,
+      full_name
+    ) VALUES (
+      v_customer_id,
+      'customer',
+      v_company_id,
+      from_email,
+      split_part(from_email, '@', 1)
+    );
+  END IF;
+
+  -- Create the ticket
+  INSERT INTO tickets (
+    customer_id,
+    status,
+    email
+  ) VALUES (
+    v_customer_id,
+    'new',
+    from_email
+  )
+  RETURNING id INTO v_ticket_id;
+
+  -- Create the initial message
+  INSERT INTO messages (
+    ticket_id,
+    sender_id,
+    content,
+    type
+  ) VALUES (
+    v_ticket_id,
+    v_customer_id,
+    COALESCE(text_content, html_content, 'No content provided'),
+    'user'
+  );
+
+  -- If subject exists, try to find and set the subject field
+  IF subject IS NOT NULL THEN
+    SELECT id INTO v_subject_field_id
+    FROM field_definitions
+    WHERE company_id = v_company_id
+      AND name = 'subject';
+
+    IF FOUND THEN
+      INSERT INTO ticket_fields (
+        ticket_id,
+        field_definition_id,
+        value
+      ) VALUES (
+        v_ticket_id,
+        v_subject_field_id,
+        subject
+      );
+    END IF;
+  END IF;
+
+  RETURN json_build_object(
+    'success', true,
+    'ticket_id', v_ticket_id,
+    'customer_id', v_customer_id,
+    'company_id', v_company_id
+  );
+END;
+$$;
+
+ALTER FUNCTION "public"."handle_inbound_email"("from_email" "text", "subject" "text", "text_content" "text", "html_content" "text") OWNER TO "postgres";
+
 CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -922,6 +1022,10 @@ GRANT ALL ON FUNCTION "public"."get_user_company_id"() TO "service_role";
 GRANT ALL ON FUNCTION "public"."get_user_role"() TO "anon";
 GRANT ALL ON FUNCTION "public"."get_user_role"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_user_role"() TO "service_role";
+
+GRANT ALL ON FUNCTION "public"."handle_inbound_email"("from_email" "text", "subject" "text", "text_content" "text", "html_content" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."handle_inbound_email"("from_email" "text", "subject" "text", "text_content" "text", "html_content" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."handle_inbound_email"("from_email" "text", "subject" "text", "text_content" "text", "html_content" "text") TO "service_role";
 
 GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "anon";
 GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "authenticated";

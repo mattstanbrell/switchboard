@@ -444,6 +444,15 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      handle_inbound_email: {
+        Args: {
+          from_email: string
+          subject: string
+          text_content: string
+          html_content: string
+        }
+        Returns: Json
+      }
       schedule_auto_close: {
         Args: {
           job_name: string
