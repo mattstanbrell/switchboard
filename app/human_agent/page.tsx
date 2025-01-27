@@ -72,6 +72,7 @@ interface RawTicket {
   priority: 'Low' | 'Medium' | 'High'
   resolved_at: string | null
   closed_at: string | null
+  email: string | null
   focus_areas: FocusArea
   ticket_fields: Array<{
     value: string | null
@@ -132,6 +133,7 @@ export default async function HumanAgentPage() {
     company_id: typedProfile.teams.company_id,
     last_seen: null,
     role: 'human_agent',
+    email: null,
     teams: typedProfile.teams
   }
 
@@ -199,7 +201,8 @@ export default async function HumanAgentPage() {
     tickets = (ticketsData as unknown as RawTicket[]).map(ticket => ({
       ...ticket,
       focus_areas: ticket.focus_areas,
-      status: capitalizeStatus(ticket.status)
+      status: capitalizeStatus(ticket.status),
+      email: ticket.email
     }))
   }
 
