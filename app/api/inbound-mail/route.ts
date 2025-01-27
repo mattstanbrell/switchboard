@@ -1,20 +1,16 @@
 import { NextResponse } from 'next/server'
 
-// Example for Next.js App Router:
 export async function POST(request: Request) {
   try {
-    // If SendGrid is sending JSON:
-    const jsonBody = await request.json()
-    console.log('SendGrid parsed data:', jsonBody)
+    // Read the raw text of the body:
+    const rawBody = await request.text()
+    console.log('Raw inbound body:\n', rawBody)
 
-    // Or, if SendGrid is sending form-data, parse with a library:
-    // (e.g., 'formidable' - though the app router currently requires a workaround)
-    // const formData = await request.formData()
-    // const subject = formData.get('subject')
+    // If you confirm it’s valid JSON, THEN parse:
+    const body = JSON.parse(rawBody)
+    console.log('Parsed body as JSON:\n', body)
 
-    // Do something with the content; e.g., create a ticket in your DB
-    // ...
-
+    // ... proceed with your logic ...
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error in inbound email route:', error)
