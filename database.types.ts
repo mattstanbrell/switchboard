@@ -447,9 +447,9 @@ export type Database = {
       handle_inbound_email: {
         Args: {
           from_email: string
-          subject: string
-          text_content: string
-          html_content: string
+          subject?: string
+          text_content?: string
+          html_content?: string
         }
         Returns: Json
       }

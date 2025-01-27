@@ -278,7 +278,7 @@ $$;
 
 ALTER FUNCTION "public"."get_user_role"() OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."handle_inbound_email"("from_email" "text", "subject" "text", "text_content" "text", "html_content" "text") RETURNS "json"
+CREATE OR REPLACE FUNCTION "public"."handle_inbound_email"("from_email" "text", "subject" "text" DEFAULT NULL::"text", "text_content" "text" DEFAULT NULL::"text", "html_content" "text" DEFAULT NULL::"text") RETURNS "json"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -288,6 +288,9 @@ DECLARE
   v_ticket_id bigint;
   v_subject_field_id bigint;
 BEGIN
+  -- Temporarily disable RLS
+  SET LOCAL row_security = off;
+
   -- Get the first company in the system (TODO: implement proper routing)
   SELECT id INTO v_company_id
   FROM companies
@@ -1024,7 +1027,6 @@ GRANT ALL ON FUNCTION "public"."get_user_role"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_user_role"() TO "service_role";
 
 GRANT ALL ON FUNCTION "public"."handle_inbound_email"("from_email" "text", "subject" "text", "text_content" "text", "html_content" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."handle_inbound_email"("from_email" "text", "subject" "text", "text_content" "text", "html_content" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."handle_inbound_email"("from_email" "text", "subject" "text", "text_content" "text", "html_content" "text") TO "service_role";
 
 GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "anon";
