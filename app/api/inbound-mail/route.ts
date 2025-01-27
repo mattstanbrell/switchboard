@@ -119,7 +119,7 @@ export async function POST(request: Request) {
     // Process the email
     console.log('Processing email with params:', {
       customer_id: customerId,
-      company_id: company.id,
+      target_company_id: company.id,
       from_email: fromEmail,
       has_subject: !!subject,
       has_text: !!text,
@@ -129,7 +129,7 @@ export async function POST(request: Request) {
     const { data, error } = await supabase
       .rpc('process_inbound_email', {
         customer_id: customerId,
-        company_id: company.id,
+        target_company_id: company.id,
         from_email: fromEmail,
         subject,
         text_content: text,
