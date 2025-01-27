@@ -453,6 +453,17 @@ export type Database = {
         }
         Returns: Json
       }
+      process_inbound_email: {
+        Args: {
+          customer_id: string
+          company_id: string
+          from_email: string
+          subject?: string
+          text_content?: string
+          html_content?: string
+        }
+        Returns: Json
+      }
       schedule_auto_close: {
         Args: {
           job_name: string

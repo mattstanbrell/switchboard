@@ -454,6 +454,71 @@ $$;
 
 ALTER FUNCTION "public"."handle_new_user"() OWNER TO "postgres";
 
+CREATE OR REPLACE FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "company_id" "uuid", "from_email" "text", "subject" "text" DEFAULT NULL::"text", "text_content" "text" DEFAULT NULL::"text", "html_content" "text" DEFAULT NULL::"text") RETURNS "json"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_ticket_id bigint;
+  v_subject_field_id bigint;
+BEGIN
+  -- Temporarily disable RLS
+  SET LOCAL row_security = off;
+
+  -- Create the ticket
+  INSERT INTO tickets (
+    customer_id,
+    status,
+    email
+  ) VALUES (
+    customer_id,
+    'new',
+    from_email
+  )
+  RETURNING id INTO v_ticket_id;
+
+  -- Create the initial message
+  INSERT INTO messages (
+    ticket_id,
+    sender_id,
+    content,
+    type
+  ) VALUES (
+    v_ticket_id,
+    customer_id,
+    COALESCE(text_content, html_content, 'No content provided'),
+    'user'
+  );
+
+  -- If subject exists, try to find and set the subject field
+  IF subject IS NOT NULL THEN
+    SELECT id INTO v_subject_field_id
+    FROM field_definitions
+    WHERE company_id = company_id
+      AND name = 'subject';
+
+    IF FOUND THEN
+      INSERT INTO ticket_fields (
+        ticket_id,
+        field_definition_id,
+        value
+      ) VALUES (
+        v_ticket_id,
+        v_subject_field_id,
+        subject
+      );
+    END IF;
+  END IF;
+
+  RETURN json_build_object(
+    'success', true,
+    'ticket_id', v_ticket_id
+  );
+END;
+$$;
+
+ALTER FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "company_id" "uuid", "from_email" "text", "subject" "text", "text_content" "text", "html_content" "text") OWNER TO "postgres";
+
 CREATE OR REPLACE FUNCTION "public"."schedule_auto_close"("job_name" "text", "ticket_id" bigint, "agent_id" "uuid", "minutes_until_close" integer) RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -1032,6 +1097,9 @@ GRANT ALL ON FUNCTION "public"."handle_inbound_email"("from_email" "text", "subj
 GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "anon";
 GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "service_role";
+
+GRANT ALL ON FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "company_id" "uuid", "from_email" "text", "subject" "text", "text_content" "text", "html_content" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "company_id" "uuid", "from_email" "text", "subject" "text", "text_content" "text", "html_content" "text") TO "service_role";
 
 GRANT ALL ON FUNCTION "public"."schedule_auto_close"("job_name" "text", "ticket_id" bigint, "agent_id" "uuid", "minutes_until_close" integer) TO "anon";
 GRANT ALL ON FUNCTION "public"."schedule_auto_close"("job_name" "text", "ticket_id" bigint, "agent_id" "uuid", "minutes_until_close" integer) TO "authenticated";

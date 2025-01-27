@@ -27,9 +27,52 @@ export async function POST(request: Request) {
     const text = formData.get('text')?.toString() || ''
     const html = formData.get('html')?.toString() || ''
 
-    // Call the security definer function to handle the email
+    // Get first company (TODO: implement proper routing)
+    const { data: company } = await supabase
+      .from('companies')
+      .select('id')
+      .limit(1)
+      .single()
+
+    if (!company) {
+      throw new Error('No company found to handle the email')
+    }
+
+    // Check if user exists
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('email', fromEmail)
+      .eq('company_id', company.id)
+      .single()
+
+    let customerId: string
+
+    if (!existingProfile) {
+      // Create auth user
+      const { data: authData, error: signUpError } = await supabase.auth.admin.createUser({
+        email: fromEmail,
+        email_confirm: true,
+        user_metadata: {
+          full_name: fromEmail.split('@')[0],
+          role: 'customer',
+          company_id: company.id
+        }
+      })
+
+      if (signUpError) throw signUpError
+      if (!authData.user) throw new Error('Failed to create user')
+
+      customerId = authData.user.id
+    } else {
+      customerId = existingProfile.id
+    }
+
+    // Process the email
     const { data, error } = await supabase
-      .rpc('handle_inbound_email', {
+      .rpc('process_inbound_email', {
+        customer_id: customerId,
+        company_id: company.id,
         from_email: fromEmail,
         subject,
         text_content: text,
