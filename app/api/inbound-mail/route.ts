@@ -73,7 +73,8 @@ export async function POST(request: Request) {
       .from('tickets')
       .insert({
         customer_id: customerId,
-        status: 'new'
+        status: 'new',
+        email: fromEmail  // Store the original sender's email
       })
       .select()
       .single()

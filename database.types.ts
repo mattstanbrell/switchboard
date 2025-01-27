@@ -179,6 +179,7 @@ export type Database = {
         Row: {
           avatar_url: string | null
           company_id: string | null
+          email: string | null
           full_name: string | null
           id: string
           last_seen: string | null
@@ -188,6 +189,7 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           company_id?: string | null
+          email?: string | null
           full_name?: string | null
           id: string
           last_seen?: string | null
@@ -197,6 +199,7 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           company_id?: string | null
+          email?: string | null
           full_name?: string | null
           id?: string
           last_seen?: string | null
@@ -314,6 +317,7 @@ export type Database = {
           closed_at: string | null
           created_at: string
           customer_id: string
+          email: string | null
           focus_area_id: number | null
           human_agent_id: string | null
           id: number
@@ -326,6 +330,7 @@ export type Database = {
           closed_at?: string | null
           created_at?: string
           customer_id: string
+          email?: string | null
           focus_area_id?: number | null
           human_agent_id?: string | null
           id?: number
@@ -338,6 +343,7 @@ export type Database = {
           closed_at?: string | null
           created_at?: string
           customer_id?: string
+          email?: string | null
           focus_area_id?: number | null
           human_agent_id?: string | null
           id?: number
@@ -412,6 +418,7 @@ export type Database = {
         Returns: {
           avatar_url: string | null
           company_id: string | null
+          email: string | null
           full_name: string | null
           id: string
           last_seen: string | null

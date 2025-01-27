@@ -206,6 +206,7 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
     "avatar_url" "text",
     "team_id" bigint,
     "company_id" "uuid",
+    "email" "text",
     CONSTRAINT "profiles_role_check" CHECK (("role" = ANY (ARRAY['customer'::"text", 'human_agent'::"text", 'admin'::"text"])))
 );
 
@@ -293,12 +294,13 @@ BEGIN
     RETURNING id INTO v_company_id;
 
     -- 2. Create the new admin profile linked to that company
-    INSERT INTO public.profiles (id, role, full_name, company_id)
+    INSERT INTO public.profiles (id, role, full_name, company_id, email)
     VALUES (
       NEW.id,
       'admin',
       NEW.raw_user_meta_data->>'full_name',
-      v_company_id
+      v_company_id,
+      NEW.email
     );
 
     -- 3. Create default field definitions
@@ -310,33 +312,36 @@ BEGIN
 
   -- If role is specified in metadata, use that role (for human agents)
   ELSIF (NEW.raw_user_meta_data->>'role') IS NOT NULL THEN
-    INSERT INTO public.profiles (id, role, full_name, company_id)
+    INSERT INTO public.profiles (id, role, full_name, company_id, email)
     VALUES (
       NEW.id,
       NEW.raw_user_meta_data->>'role',
       NEW.raw_user_meta_data->>'full_name',
-      (NEW.raw_user_meta_data->>'company_id')::uuid
+      (NEW.raw_user_meta_data->>'company_id')::uuid,
+      NEW.email
     );
 
   -- Existing customer signup flow
   ELSIF (NEW.raw_user_meta_data->>'company_id') IS NOT NULL THEN
     v_company_id := (NEW.raw_user_meta_data->>'company_id')::uuid;
 
-    INSERT INTO public.profiles (id, role, full_name, company_id)
+    INSERT INTO public.profiles (id, role, full_name, company_id, email)
     VALUES (
       NEW.id,
       'customer',
       NEW.raw_user_meta_data->>'full_name',
-      v_company_id
+      v_company_id,
+      NEW.email
     );
 
   ELSE
     -- Fallback: no company info provided
-    INSERT INTO public.profiles (id, role, full_name)
+    INSERT INTO public.profiles (id, role, full_name, email)
     VALUES (
       NEW.id,
       'customer',
-      NEW.raw_user_meta_data->>'full_name'
+      NEW.raw_user_meta_data->>'full_name',
+      NEW.email
     );
   END IF;
 
@@ -554,7 +559,8 @@ CREATE TABLE IF NOT EXISTS "public"."tickets" (
     "focus_area_id" bigint,
     "resolved_at" timestamp without time zone,
     "closed_at" timestamp without time zone,
-    "priority" "public"."ticket_priority" DEFAULT 'Medium'::"public"."ticket_priority" NOT NULL
+    "priority" "public"."ticket_priority" DEFAULT 'Medium'::"public"."ticket_priority" NOT NULL,
+    "email" "text"
 );
 
 ALTER TABLE "public"."tickets" OWNER TO "postgres";
@@ -611,6 +617,9 @@ ALTER TABLE ONLY "public"."ticket_fields"
 
 ALTER TABLE ONLY "public"."tickets"
     ADD CONSTRAINT "tickets_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."profiles"
+    ADD CONSTRAINT "unique_email_per_company" UNIQUE ("email", "company_id");
 
 CREATE INDEX "idx_field_definitions_company_order" ON "public"."field_definitions" USING "btree" ("company_id", "display_order");
 
@@ -855,15 +864,11 @@ CREATE POLICY "users_can_view_team_focus_areas" ON "public"."team_focus_areas" F
            FROM "public"."profiles"
           WHERE ("profiles"."id" = "auth"."uid"()))))));
 
-CREATE PUBLICATION "realtime_messages_publication_v2_34_1" WITH (publish = 'insert, update, delete, truncate');
-
-ALTER PUBLICATION "realtime_messages_publication_v2_34_1" OWNER TO "supabase_admin";
-
 ALTER PUBLICATION "supabase_realtime" OWNER TO "postgres";
 
-CREATE PUBLICATION "supabase_realtime_messages_publication_v2_34_6" WITH (publish = 'insert, update, delete, truncate');
+CREATE PUBLICATION "supabase_realtime_messages_publication" WITH (publish = 'insert, update, delete, truncate');
 
-ALTER PUBLICATION "supabase_realtime_messages_publication_v2_34_6" OWNER TO "supabase_admin";
+ALTER PUBLICATION "supabase_realtime_messages_publication" OWNER TO "supabase_admin";
 
 ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."focus_areas";
 
