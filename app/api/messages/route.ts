@@ -11,7 +11,7 @@ type SupabaseTicket = {
 		companies: {
 			email: string;
 		}[];
-	}[];
+	};
 };
 
 export async function POST(request: Request) {
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
 			return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
 		}
 
-		const typedTicket = ticket as SupabaseTicket;
+		const typedTicket = ticket as unknown as SupabaseTicket;
 
 		// Get the original message's email headers if they exist
 		const { data: originalMessage } = await supabase
@@ -88,28 +88,66 @@ export async function POST(request: Request) {
 		}
 
 		// If the ticket has an associated email, send an email reply
+		console.log("Checking email conditions:", {
+			hasTicketEmail: Boolean(typedTicket.email),
+			hasProfiles: Boolean(typedTicket.profiles),
+			hasCompanies: Boolean(typedTicket.profiles?.companies),
+			companiesArray: typedTicket.profiles?.companies,
+			ticketEmail: typedTicket.email,
+			fullProfiles: typedTicket.profiles,
+		});
+
 		if (
 			typedTicket.email &&
-			typedTicket.profiles[0] &&
-			typedTicket.profiles[0].companies[0]
+			typedTicket.profiles &&
+			typedTicket.profiles.companies[0]
 		) {
-			const { messageId, references } = await sendThreadedEmail({
-				from: typedTicket.profiles[0].companies[0].email,
+			console.log("Email conditions met, preparing to send email");
+			console.log("Sending email with:", {
+				from: typedTicket.profiles.companies[0].email,
 				to: typedTicket.email,
 				subject: `Re: Ticket #${ticketId}`,
-				content,
-				inReplyTo: originalMessage?.email_message_id,
-				references: originalMessage?.email_references || [],
+				hasInReplyTo: Boolean(originalMessage?.email_message_id),
+				hasReferences: Boolean(originalMessage?.email_references),
+				content:
+					content.substring(0, 100) + (content.length > 100 ? "..." : ""),
 			});
 
-			// Update the message with the email headers
-			await supabase
-				.from("messages")
-				.update({
-					email_message_id: messageId,
-					email_references: references,
-				})
-				.eq("id", message.id);
+			try {
+				const { messageId, references } = await sendThreadedEmail({
+					from: typedTicket.profiles.companies[0].email,
+					to: typedTicket.email,
+					subject: `Re: Ticket #${ticketId}`,
+					content,
+					inReplyTo: originalMessage?.email_message_id,
+					references: originalMessage?.email_references || [],
+				});
+
+				console.log("Email sent successfully:", { messageId, references });
+
+				// Update the message with the email headers
+				const { error: updateError } = await supabase
+					.from("messages")
+					.update({
+						email_message_id: messageId,
+						email_references: references,
+					})
+					.eq("id", message.id);
+
+				if (updateError) {
+					console.error(
+						"Error updating message with email headers:",
+						updateError,
+					);
+				} else {
+					console.log("Successfully updated message with email headers");
+				}
+			} catch (emailError) {
+				console.error("Error sending email:", emailError);
+				throw emailError;
+			}
+		} else {
+			console.log("Email conditions not met, skipping email send");
 		}
 
 		return NextResponse.json(message);
