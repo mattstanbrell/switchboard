@@ -95,6 +95,27 @@ $$;
 
 ALTER FUNCTION "public"."assign_ticket_to_team"() OWNER TO "postgres";
 
+CREATE OR REPLACE FUNCTION "public"."check_and_record_email"("p_message_id" "text", "p_company_id" "uuid") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+    -- Clean up old records first (older than 1 hour)
+    DELETE FROM processed_emails 
+    WHERE processed_at < now() - INTERVAL '1 hour';
+
+    -- Try to insert the new record
+    INSERT INTO processed_emails (message_id, company_id)
+    VALUES (p_message_id, p_company_id)
+    ON CONFLICT (message_id) DO NOTHING;
+
+    -- Return true if this is a new email (insert succeeded)
+    RETURN FOUND;
+END;
+$$;
+
+ALTER FUNCTION "public"."check_and_record_email"("p_message_id" "text", "p_company_id" "uuid") OWNER TO "postgres";
+
 CREATE OR REPLACE FUNCTION "public"."close_resolved_ticket"("ticket_id_param" bigint, "agent_id_param" "uuid", "job_name" "text") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -185,6 +206,14 @@ BEGIN
 END;$$;
 
 ALTER FUNCTION "public"."close_resolved_ticket"("ticket_id_param" bigint, "agent_id_param" "uuid", "job_name" "text") OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "public"."generate_company_email"("company_name" "text") RETURNS "text"
+    LANGUAGE "sql" IMMUTABLE
+    AS $$
+    SELECT LOWER(REGEXP_REPLACE(company_name, '[^a-zA-Z0-9]', '')) || '@switchboard.mattstanbrell.com';
+$$;
+
+ALTER FUNCTION "public"."generate_company_email"("company_name" "text") OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."get_companies"() RETURNS TABLE("id" "uuid", "name" "text")
     LANGUAGE "sql" SECURITY DEFINER
@@ -391,12 +420,15 @@ DECLARE
 BEGIN
   -- If the user signed up to create a new company (i.e., "Register Company"):
   IF (NEW.raw_user_meta_data->>'company_name') IS NOT NULL THEN
-    -- 1. Create the new company
-    INSERT INTO public.companies (name)
-    VALUES (NEW.raw_user_meta_data->>'company_name')
+    -- 1. Create the new company with generated email
+    INSERT INTO public.companies (name, email)
+    VALUES (
+      NEW.raw_user_meta_data->>'company_name',
+      public.generate_company_email(NEW.raw_user_meta_data->>'company_name')
+    )
     RETURNING id INTO v_company_id;
 
-    -- 2. Create the new admin profile linked to that company
+    -- Rest of the function remains the same...
     INSERT INTO public.profiles (id, role, full_name, company_id, email)
     VALUES (
       NEW.id,
@@ -406,14 +438,14 @@ BEGIN
       NEW.email
     );
 
-    -- 3. Create default field definitions
+    -- Create default field definitions
     INSERT INTO public.field_definitions 
       (company_id, name, label, field_type, is_required, display_order)
     VALUES
       (v_company_id, 'subject', 'Subject', 'text', true, 1),
       (v_company_id, 'content', 'Content', 'text', true, 2);
 
-  -- If role is specified in metadata, use that role (for human agents)
+  -- Rest of the function remains unchanged...
   ELSIF (NEW.raw_user_meta_data->>'role') IS NOT NULL THEN
     INSERT INTO public.profiles (id, role, full_name, company_id, email)
     VALUES (
@@ -424,7 +456,6 @@ BEGIN
       NEW.email
     );
 
-  -- Existing customer signup flow
   ELSIF (NEW.raw_user_meta_data->>'company_id') IS NOT NULL THEN
     v_company_id := (NEW.raw_user_meta_data->>'company_id')::uuid;
 
@@ -667,7 +698,8 @@ ALTER FUNCTION "public"."unschedule_job"("job_name" "text") OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."companies" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "name" "text" NOT NULL
+    "name" "text" NOT NULL,
+    "email" "text" NOT NULL
 );
 
 ALTER TABLE "public"."companies" OWNER TO "postgres";
@@ -759,6 +791,15 @@ ALTER TABLE "public"."messages_id_seq" OWNER TO "postgres";
 
 ALTER SEQUENCE "public"."messages_id_seq" OWNED BY "public"."messages"."id";
 
+CREATE TABLE IF NOT EXISTS "public"."processed_emails" (
+    "message_id" "text" NOT NULL,
+    "company_id" "uuid" NOT NULL,
+    "processed_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "processed_emails_processed_at_check" CHECK (("processed_at" > ("now"() - '01:00:00'::interval)))
+);
+
+ALTER TABLE "public"."processed_emails" OWNER TO "postgres";
+
 CREATE TABLE IF NOT EXISTS "public"."team_focus_areas" (
     "team_id" bigint NOT NULL,
     "focus_area_id" bigint NOT NULL
@@ -833,6 +874,9 @@ ALTER TABLE ONLY "public"."teams" ALTER COLUMN "id" SET DEFAULT "nextval"('"publ
 ALTER TABLE ONLY "public"."tickets" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."tickets_id_seq"'::"regclass");
 
 ALTER TABLE ONLY "public"."companies"
+    ADD CONSTRAINT "companies_email_unique" UNIQUE ("email");
+
+ALTER TABLE ONLY "public"."companies"
     ADD CONSTRAINT "companies_pkey" PRIMARY KEY ("id");
 
 ALTER TABLE ONLY "public"."field_definitions"
@@ -846,6 +890,9 @@ ALTER TABLE ONLY "public"."internal_notes"
 
 ALTER TABLE ONLY "public"."messages"
     ADD CONSTRAINT "messages_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."processed_emails"
+    ADD CONSTRAINT "processed_emails_pkey" PRIMARY KEY ("message_id");
 
 ALTER TABLE ONLY "public"."profiles"
     ADD CONSTRAINT "profiles_pkey" PRIMARY KEY ("id");
@@ -886,6 +933,9 @@ ALTER TABLE ONLY "public"."messages"
 
 ALTER TABLE ONLY "public"."messages"
     ADD CONSTRAINT "messages_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."processed_emails"
+    ADD CONSTRAINT "processed_emails_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id");
 
 ALTER TABLE ONLY "public"."profiles"
     ADD CONSTRAINT "profiles_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id");
@@ -1026,6 +1076,8 @@ ALTER TABLE "public"."internal_notes" ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE "public"."messages" ENABLE ROW LEVEL SECURITY;
 
+ALTER TABLE "public"."processed_emails" ENABLE ROW LEVEL SECURITY;
+
 ALTER TABLE "public"."profiles" ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE "public"."team_focus_areas" ENABLE ROW LEVEL SECURITY;
@@ -1137,9 +1189,17 @@ GRANT ALL ON FUNCTION "public"."assign_ticket_to_team"() TO "anon";
 GRANT ALL ON FUNCTION "public"."assign_ticket_to_team"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."assign_ticket_to_team"() TO "service_role";
 
+GRANT ALL ON FUNCTION "public"."check_and_record_email"("p_message_id" "text", "p_company_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."check_and_record_email"("p_message_id" "text", "p_company_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."check_and_record_email"("p_message_id" "text", "p_company_id" "uuid") TO "service_role";
+
 GRANT ALL ON FUNCTION "public"."close_resolved_ticket"("ticket_id_param" bigint, "agent_id_param" "uuid", "job_name" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."close_resolved_ticket"("ticket_id_param" bigint, "agent_id_param" "uuid", "job_name" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."close_resolved_ticket"("ticket_id_param" bigint, "agent_id_param" "uuid", "job_name" "text") TO "service_role";
+
+GRANT ALL ON FUNCTION "public"."generate_company_email"("company_name" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."generate_company_email"("company_name" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."generate_company_email"("company_name" "text") TO "service_role";
 
 GRANT ALL ON FUNCTION "public"."get_companies"() TO "anon";
 GRANT ALL ON FUNCTION "public"."get_companies"() TO "authenticated";
@@ -1225,6 +1285,10 @@ GRANT ALL ON TABLE "public"."messages" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."messages_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."messages_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."messages_id_seq" TO "service_role";
+
+GRANT ALL ON TABLE "public"."processed_emails" TO "anon";
+GRANT ALL ON TABLE "public"."processed_emails" TO "authenticated";
+GRANT ALL ON TABLE "public"."processed_emails" TO "service_role";
 
 GRANT ALL ON TABLE "public"."team_focus_areas" TO "anon";
 GRANT ALL ON TABLE "public"."team_focus_areas" TO "authenticated";

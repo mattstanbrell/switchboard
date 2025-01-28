@@ -11,14 +11,17 @@ export type Database = {
     Tables: {
       companies: {
         Row: {
+          email: string
           id: string
           name: string
         }
         Insert: {
+          email: string
           id?: string
           name: string
         }
         Update: {
+          email?: string
           id?: string
           name?: string
         }
@@ -137,6 +140,8 @@ export type Database = {
         Row: {
           content: string
           created_at: string
+          email_message_id: string | null
+          email_references: string[] | null
           id: number
           sender_id: string
           ticket_id: number
@@ -145,6 +150,8 @@ export type Database = {
         Insert: {
           content: string
           created_at?: string
+          email_message_id?: string | null
+          email_references?: string[] | null
           id?: number
           sender_id: string
           ticket_id: number
@@ -153,6 +160,8 @@ export type Database = {
         Update: {
           content?: string
           created_at?: string
+          email_message_id?: string | null
+          email_references?: string[] | null
           id?: number
           sender_id?: string
           ticket_id?: number
@@ -171,6 +180,32 @@ export type Database = {
             columns: ["ticket_id"]
             isOneToOne: false
             referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      processed_emails: {
+        Row: {
+          company_id: string
+          message_id: string
+          processed_at: string
+        }
+        Insert: {
+          company_id: string
+          message_id: string
+          processed_at?: string
+        }
+        Update: {
+          company_id?: string
+          message_id?: string
+          processed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processed_emails_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -396,6 +431,13 @@ export type Database = {
         }
         Returns: undefined
       }
+      check_and_record_email: {
+        Args: {
+          p_message_id: string
+          p_company_id: string
+        }
+        Returns: boolean
+      }
       close_resolved_ticket: {
         Args: {
           ticket_id_param: number
@@ -403,6 +445,12 @@ export type Database = {
           job_name: string
         }
         Returns: undefined
+      }
+      generate_company_email: {
+        Args: {
+          company_name: string
+        }
+        Returns: string
       }
       get_companies: {
         Args: Record<PropertyKey, never>
