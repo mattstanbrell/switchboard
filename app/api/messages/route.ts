@@ -7,10 +7,10 @@ type SupabaseTicket = {
 	email: string | null;
 	customer_id: string;
 	profiles: {
-		email: string;
-	}[];
-	companies: {
-		email: string;
+		company_id: string;
+		companies: {
+			email: string;
+		}[];
 	}[];
 };
 
@@ -45,10 +45,10 @@ export async function POST(request: Request) {
         email,
         customer_id,
         profiles!tickets_customer_id_fkey (
-          email
-        ),
-        companies!tickets_company_id_fkey (
-          email
+          company_id,
+          companies:companies (
+            email
+          )
         )
       `)
 			.eq("id", ticketId)
@@ -91,11 +91,11 @@ export async function POST(request: Request) {
 		if (
 			typedTicket.email &&
 			typedTicket.profiles[0] &&
-			typedTicket.companies[0]
+			typedTicket.profiles[0].companies[0]
 		) {
 			const { messageId, references } = await sendThreadedEmail({
-				from: typedTicket.companies[0].email,
-				to: typedTicket.profiles[0].email,
+				from: typedTicket.profiles[0].companies[0].email,
+				to: typedTicket.email,
 				subject: `Re: Ticket #${ticketId}`,
 				content,
 				inReplyTo: originalMessage?.email_message_id,

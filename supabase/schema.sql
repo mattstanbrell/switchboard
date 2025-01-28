@@ -775,7 +775,9 @@ CREATE TABLE IF NOT EXISTS "public"."messages" (
     "sender_id" "uuid" NOT NULL,
     "content" "text" NOT NULL,
     "created_at" timestamp without time zone DEFAULT "now"() NOT NULL,
-    "type" "public"."message_type" DEFAULT 'user'::"public"."message_type" NOT NULL
+    "type" "public"."message_type" DEFAULT 'user'::"public"."message_type" NOT NULL,
+    "email_message_id" "text",
+    "email_references" "text"[]
 );
 
 ALTER TABLE "public"."messages" OWNER TO "postgres";
