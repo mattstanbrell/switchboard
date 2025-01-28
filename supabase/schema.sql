@@ -454,7 +454,7 @@ $$;
 
 ALTER FUNCTION "public"."handle_new_user"() OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "company_id" "uuid", "from_email" "text", "subject" "text" DEFAULT NULL::"text", "text_content" "text" DEFAULT NULL::"text", "html_content" "text" DEFAULT NULL::"text") RETURNS "json"
+CREATE OR REPLACE FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "target_company_id" "uuid", "from_email" "text", "subject" "text" DEFAULT NULL::"text", "text_content" "text" DEFAULT NULL::"text", "html_content" "text" DEFAULT NULL::"text") RETURNS "json"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -494,7 +494,7 @@ BEGIN
   IF subject IS NOT NULL THEN
     SELECT id INTO v_subject_field_id
     FROM field_definitions
-    WHERE company_id = company_id
+    WHERE company_id = target_company_id
       AND name = 'subject';
 
     IF FOUND THEN
@@ -517,7 +517,7 @@ BEGIN
 END;
 $$;
 
-ALTER FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "company_id" "uuid", "from_email" "text", "subject" "text", "text_content" "text", "html_content" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "target_company_id" "uuid", "from_email" "text", "subject" "text", "text_content" "text", "html_content" "text") OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."schedule_auto_close"("job_name" "text", "ticket_id" bigint, "agent_id" "uuid", "minutes_until_close" integer) RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -1098,8 +1098,9 @@ GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "anon";
 GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "service_role";
 
-GRANT ALL ON FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "company_id" "uuid", "from_email" "text", "subject" "text", "text_content" "text", "html_content" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "company_id" "uuid", "from_email" "text", "subject" "text", "text_content" "text", "html_content" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "target_company_id" "uuid", "from_email" "text", "subject" "text", "text_content" "text", "html_content" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "target_company_id" "uuid", "from_email" "text", "subject" "text", "text_content" "text", "html_content" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "target_company_id" "uuid", "from_email" "text", "subject" "text", "text_content" "text", "html_content" "text") TO "service_role";
 
 GRANT ALL ON FUNCTION "public"."schedule_auto_close"("job_name" "text", "ticket_id" bigint, "agent_id" "uuid", "minutes_until_close" integer) TO "anon";
 GRANT ALL ON FUNCTION "public"."schedule_auto_close"("job_name" "text", "ticket_id" bigint, "agent_id" "uuid", "minutes_until_close" integer) TO "authenticated";

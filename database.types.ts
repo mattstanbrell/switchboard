@@ -456,7 +456,7 @@ export type Database = {
       process_inbound_email: {
         Args: {
           customer_id: string
-          company_id: string
+          target_company_id: string
           from_email: string
           subject?: string
           text_content?: string
