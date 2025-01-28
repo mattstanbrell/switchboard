@@ -35,8 +35,10 @@ export async function POST(request: Request) {
 		const body = await request.json();
 		const { ticketId, content, senderId } = body;
 
+		console.log("Looking up ticket:", { ticketId, content, senderId });
+
 		// Get ticket details including customer email and company email
-		const { data: ticket } = await supabase
+		const { data: ticket, error: ticketError } = await supabase
 			.from("tickets")
 			.select(`
         id,
@@ -45,12 +47,14 @@ export async function POST(request: Request) {
         profiles!tickets_customer_id_fkey (
           email
         ),
-        companies (
+        companies!tickets_company_id_fkey (
           email
         )
       `)
 			.eq("id", ticketId)
 			.single();
+
+		console.log("Ticket lookup result:", { ticket, error: ticketError });
 
 		if (!ticket) {
 			return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
