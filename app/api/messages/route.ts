@@ -15,7 +15,9 @@ type SupabaseTicket = {
 };
 
 export async function POST(request: Request) {
+	console.log("POST /api/messages - Handler started");
 	try {
+		console.log("Checking environment variables...");
 		const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 		const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
