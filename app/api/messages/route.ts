@@ -10,7 +10,7 @@ type SupabaseTicket = {
 		company_id: string;
 		companies: {
 			email: string;
-		}[];
+		};
 	};
 };
 
@@ -100,11 +100,11 @@ export async function POST(request: Request) {
 		if (
 			typedTicket.email &&
 			typedTicket.profiles &&
-			typedTicket.profiles.companies[0]
+			typedTicket.profiles.companies
 		) {
 			console.log("Email conditions met, preparing to send email");
 			console.log("Sending email with:", {
-				from: typedTicket.profiles.companies[0].email,
+				from: typedTicket.profiles.companies.email,
 				to: typedTicket.email,
 				subject: `Re: Ticket #${ticketId}`,
 				hasInReplyTo: Boolean(originalMessage?.email_message_id),
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
 
 			try {
 				const { messageId, references } = await sendThreadedEmail({
-					from: typedTicket.profiles.companies[0].email,
+					from: typedTicket.profiles.companies.email,
 					to: typedTicket.email,
 					subject: `Re: Ticket #${ticketId}`,
 					content,
