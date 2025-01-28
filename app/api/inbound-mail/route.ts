@@ -69,12 +69,32 @@ export async function POST(request: Request) {
 			throw new Error("Invalid email format");
 		}
 
-		// Get first company
-		console.log("Fetching company...");
+		// Get company based on the recipient email
+		const envelope = formData.get("envelope");
+		let toEmail: string | null = null;
+
+		if (envelope) {
+			try {
+				const parsedEnvelope = JSON.parse(envelope as string);
+				toEmail = Array.isArray(parsedEnvelope.to)
+					? parsedEnvelope.to[0]
+					: parsedEnvelope.to;
+			} catch (e) {
+				console.error("Failed to parse envelope:", e);
+			}
+		}
+
+		if (!toEmail) {
+			console.error("No recipient email found");
+			throw new Error("No recipient email found");
+		}
+
+		// Get company by email
+		console.log("Fetching company for email:", toEmail);
 		const { data: company } = await supabase
 			.from("companies")
 			.select("id")
-			.limit(1)
+			.eq("email", toEmail)
 			.single();
 
 		console.log("Company found:", company);
