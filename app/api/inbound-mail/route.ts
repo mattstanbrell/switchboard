@@ -10,22 +10,26 @@ export async function POST(request: Request) {
 		const formData = await request.formData();
 		console.log("Form data received:", Object.fromEntries(formData.entries()));
 
+		// Verify required environment variables
+		const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+		const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+		if (!supabaseUrl || !supabaseServiceKey) {
+			throw new Error("Missing required environment variables");
+		}
+
 		// Create admin client
-		const supabase = createClient(
-			process.env.NEXT_PUBLIC_SUPABASE_URL!,
-			process.env.SUPABASE_SERVICE_ROLE_KEY!,
-			{
-				auth: {
-					autoRefreshToken: false,
-					persistSession: false,
-				},
+		const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+			auth: {
+				autoRefreshToken: false,
+				persistSession: false,
 			},
-		);
+		});
 
 		// Initialize parser with the fields we want to extract
 		const parser = new Parse(
 			{
-				keys: ["from", "subject", "text", "html"],
+				keys: ["from", "subject", "text", "html", "headers"],
 			},
 			{
 				body: Object.fromEntries(formData.entries()),
@@ -77,6 +81,27 @@ export async function POST(request: Request) {
 
 		if (!company) {
 			throw new Error("No company found to handle the email");
+		}
+
+		// Extract Message-ID from headers
+		const headers = emailData.headers || "";
+		const messageIdMatch = headers.match(/Message-Id:\s*<([^>]+)>/i);
+		const messageId = messageIdMatch ? messageIdMatch[1] : null;
+
+		if (!messageId) {
+			console.error("No Message-ID found in headers");
+			throw new Error("No Message-ID found in headers");
+		}
+
+		// Check if this email has been processed before
+		const { data: isNewEmail } = await supabase.rpc("check_and_record_email", {
+			p_message_id: messageId,
+			p_company_id: company.id,
+		});
+
+		if (!isNewEmail) {
+			console.log("Duplicate email detected, skipping processing");
+			return NextResponse.json({ status: "skipped", reason: "duplicate" });
 		}
 
 		// Fetch available focus areas for this company

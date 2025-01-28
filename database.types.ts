@@ -453,17 +453,30 @@ export type Database = {
         }
         Returns: Json
       }
-      process_inbound_email: {
-        Args: {
-          customer_id: string
-          target_company_id: string
-          from_email: string
-          subject?: string
-          text_content?: string
-          html_content?: string
-        }
-        Returns: Json
-      }
+      process_inbound_email:
+        | {
+            Args: {
+              customer_id: string
+              target_company_id: string
+              from_email: string
+              subject?: string
+              text_content?: string
+              html_content?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              customer_id: string
+              target_company_id: string
+              from_email: string
+              subject?: string
+              text_content?: string
+              html_content?: string
+              focus_area?: string
+            }
+            Returns: Json
+          }
       schedule_auto_close: {
         Args: {
           job_name: string
