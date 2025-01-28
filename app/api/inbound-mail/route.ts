@@ -157,6 +157,10 @@ Content to analyze: ${emailData.text || emailData.html}`;
 		const chosenFocusArea = await structuredLLM.invoke(prompt);
 		console.log("Chosen focus area:", chosenFocusArea);
 
+		// Convert 'Other' focus area to null
+		const focusAreaValue =
+			chosenFocusArea.focusArea === "Other" ? null : chosenFocusArea.focusArea;
+
 		// Process the email
 		console.log("Processing email with params:", {
 			customer_id: customerId,
@@ -165,6 +169,7 @@ Content to analyze: ${emailData.text || emailData.html}`;
 			has_subject: !!emailData.subject,
 			has_text: !!emailData.text,
 			has_html: !!emailData.html,
+			focus_area: focusAreaValue,
 		});
 
 		const { data, error } = await supabase.rpc("process_inbound_email", {
@@ -174,6 +179,7 @@ Content to analyze: ${emailData.text || emailData.html}`;
 			subject: emailData.subject || "",
 			text_content: emailData.text || "",
 			html_content: emailData.html || "",
+			focus_area: focusAreaValue,
 		});
 
 		if (error) {
