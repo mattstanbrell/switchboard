@@ -626,6 +626,86 @@ $$;
 
 ALTER FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "target_company_id" "uuid", "from_email" "text", "subject" "text", "text_content" "text", "html_content" "text", "focus_area" "text") OWNER TO "postgres";
 
+CREATE OR REPLACE FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "target_company_id" "uuid", "from_email" "text", "subject" "text" DEFAULT NULL::"text", "text_content" "text" DEFAULT NULL::"text", "html_content" "text" DEFAULT NULL::"text", "focus_area" "text" DEFAULT NULL::"text", "message_id" "text" DEFAULT NULL::"text") RETURNS "json"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_ticket_id bigint;
+  v_subject_field_id bigint;
+  v_focus_area_id bigint;
+BEGIN
+  -- Temporarily disable RLS
+  SET LOCAL row_security = off;
+
+  -- If focus area is provided, look up its ID
+  IF focus_area IS NOT NULL THEN
+    SELECT id INTO v_focus_area_id
+    FROM focus_areas
+    WHERE company_id = target_company_id
+      AND name = focus_area;
+  END IF;
+
+  -- Create the ticket
+  INSERT INTO tickets (
+    customer_id,
+    status,
+    email,
+    focus_area_id
+  ) VALUES (
+    customer_id,
+    'new',
+    from_email,
+    v_focus_area_id
+  )
+  RETURNING id INTO v_ticket_id;
+
+  -- Create the initial message with email headers
+  INSERT INTO messages (
+    ticket_id,
+    sender_id,
+    content,
+    type,
+    email_message_id,  -- Add email headers
+    email_references   -- Add empty references array for new thread
+  ) VALUES (
+    v_ticket_id,
+    customer_id,
+    COALESCE(text_content, html_content, 'No content provided'),
+    'user',
+    message_id,
+    ARRAY[]::text[]
+  );
+
+  -- If subject exists, try to find and set the subject field
+  IF subject IS NOT NULL THEN
+    SELECT id INTO v_subject_field_id
+    FROM field_definitions
+    WHERE company_id = target_company_id
+      AND name = 'subject';
+
+    IF FOUND THEN
+      INSERT INTO ticket_fields (
+        ticket_id,
+        field_definition_id,
+        value
+      ) VALUES (
+        v_ticket_id,
+        v_subject_field_id,
+        subject
+      );
+    END IF;
+  END IF;
+
+  RETURN json_build_object(
+    'success', true,
+    'ticket_id', v_ticket_id
+  );
+END;
+$$;
+
+ALTER FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "target_company_id" "uuid", "from_email" "text", "subject" "text", "text_content" "text", "html_content" "text", "focus_area" "text", "message_id" "text") OWNER TO "postgres";
+
 CREATE OR REPLACE FUNCTION "public"."schedule_auto_close"("job_name" "text", "ticket_id" bigint, "agent_id" "uuid", "minutes_until_close" integer) RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -1243,6 +1323,10 @@ GRANT ALL ON FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "ta
 GRANT ALL ON FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "target_company_id" "uuid", "from_email" "text", "subject" "text", "text_content" "text", "html_content" "text", "focus_area" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "target_company_id" "uuid", "from_email" "text", "subject" "text", "text_content" "text", "html_content" "text", "focus_area" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "target_company_id" "uuid", "from_email" "text", "subject" "text", "text_content" "text", "html_content" "text", "focus_area" "text") TO "service_role";
+
+GRANT ALL ON FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "target_company_id" "uuid", "from_email" "text", "subject" "text", "text_content" "text", "html_content" "text", "focus_area" "text", "message_id" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "target_company_id" "uuid", "from_email" "text", "subject" "text", "text_content" "text", "html_content" "text", "focus_area" "text", "message_id" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."process_inbound_email"("customer_id" "uuid", "target_company_id" "uuid", "from_email" "text", "subject" "text", "text_content" "text", "html_content" "text", "focus_area" "text", "message_id" "text") TO "service_role";
 
 GRANT ALL ON FUNCTION "public"."schedule_auto_close"("job_name" "text", "ticket_id" bigint, "agent_id" "uuid", "minutes_until_close" integer) TO "anon";
 GRANT ALL ON FUNCTION "public"."schedule_auto_close"("job_name" "text", "ticket_id" bigint, "agent_id" "uuid", "minutes_until_close" integer) TO "authenticated";

@@ -525,6 +525,19 @@ export type Database = {
             }
             Returns: Json
           }
+        | {
+            Args: {
+              customer_id: string
+              target_company_id: string
+              from_email: string
+              subject?: string
+              text_content?: string
+              html_content?: string
+              focus_area?: string
+              message_id?: string
+            }
+            Returns: Json
+          }
       schedule_auto_close: {
         Args: {
           job_name: string

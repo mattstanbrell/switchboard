@@ -215,6 +215,7 @@ Content to analyze: ${emailData.text || emailData.html}`;
 			has_text: !!emailData.text,
 			has_html: !!emailData.html,
 			focus_area: focusAreaValue,
+			message_id: messageId,
 		});
 
 		const { data, error } = await supabase.rpc("process_inbound_email", {
@@ -225,6 +226,7 @@ Content to analyze: ${emailData.text || emailData.html}`;
 			text_content: emailData.text || "",
 			html_content: emailData.html || "",
 			focus_area: focusAreaValue,
+			message_id: messageId,
 		});
 
 		if (error) {
