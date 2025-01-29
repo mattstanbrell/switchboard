@@ -63,12 +63,31 @@ export async function POST(request: Request) {
 		const typedTicket = ticket as unknown as SupabaseTicket;
 
 		// Get the original message's email headers if they exist
+		const { data: allMessages } = await supabase
+			.from("messages")
+			.select("*")
+			.eq("ticket_id", ticketId)
+			.order("created_at", { ascending: true });
+
+		console.log("All messages in ticket:", {
+			ticketId,
+			messageCount: allMessages?.length,
+			messages: allMessages?.map((m) => ({
+				id: m.id,
+				type: m.type,
+				sender_id: m.sender_id,
+				hasEmailId: Boolean(m.email_message_id),
+				emailId: m.email_message_id,
+				hasRefs: Boolean(m.email_references),
+				created_at: m.created_at,
+			})),
+		});
+
 		const { data: originalMessage } = await supabase
 			.from("messages")
 			.select("email_message_id, email_references")
 			.eq("ticket_id", ticketId)
-			.eq("type", "user")
-			.neq("sender_id", senderId)
+			.not("email_message_id", "is", null)
 			.order("created_at", { ascending: true })
 			.limit(1)
 			.single();
@@ -77,6 +96,7 @@ export async function POST(request: Request) {
 			originalMessage,
 			hasMessageId: Boolean(originalMessage?.email_message_id),
 			hasReferences: Boolean(originalMessage?.email_references),
+			ticketId,
 		});
 
 		// Insert the message into the database
