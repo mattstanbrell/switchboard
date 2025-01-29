@@ -165,15 +165,6 @@ export async function POST(request: Request) {
 			return NextResponse.json({ status: "skipped", reason: "duplicate" });
 		}
 
-		// Fetch available focus areas for this company
-		console.log("Fetching focus areas...");
-		const { data: focusAreas } = await supabase
-			.from("focus_areas")
-			.select("name")
-			.eq("company_id", company.id);
-
-		console.log("Focus areas found:", focusAreas);
-
 		// Check if user exists
 		console.log("Checking for existing profile...");
 		const { data: existingProfile } = await supabase
@@ -221,53 +212,20 @@ export async function POST(request: Request) {
 			customerId = existingProfile.id;
 		}
 
-		// Auto-generate ticket focus area
-		const model = new ChatOpenAI({
-			model: "gpt-4o-mini",
-			temperature: 0,
-		});
-
-		const focusArea = z.object({
-			focusArea: z.string().describe("The focus area of the ticket"),
-		});
-
-		const structuredLLM = model.withStructuredOutput(focusArea);
-		const prompt = `Specify the most relevant focus area for this customer support ticket. Select from the available options: ${focusAreas?.map((fa) => fa.name).join(", ")}. If the ticket is not related to any of the focus areas, select 'Other'.
-
-Email ${emailData.subject ? `Subject: ${emailData.subject}` : "has no subject"}
-
-Content to analyze: ${emailData.text || emailData.html}`;
-
-		console.log("Sending prompt to LLM:", prompt);
-
-		const chosenFocusArea = await structuredLLM.invoke(prompt);
-		console.log("Chosen focus area:", chosenFocusArea);
-
-		// Convert 'Other' focus area to null
-		const focusAreaValue =
-			chosenFocusArea.focusArea === "Other" ? null : chosenFocusArea.focusArea;
-
-		// Process the email
-		console.log("Processing email with params:", {
-			customer_id: customerId,
-			target_company_id: company.id,
-			from_email: fromEmail,
-			has_subject: !!emailData.subject,
-			has_text: !!emailData.text,
-			has_html: !!emailData.html,
-			focus_area: focusAreaValue,
-			message_id: messageId,
-			existing_ticket_id: existingTicketId,
-		});
-
 		if (existingTicketId) {
 			// Add message to existing ticket
+			// Clean up email content by removing quoted text
+			const cleanContent =
+				emailData.text?.split(/\r?\n\s*>[^\n]*/)[0].trim() ||
+				emailData.html?.split(/\r?\n\s*>[^\n]*/)[0].trim() ||
+				"No content provided";
+
 			const { data: message, error: messageError } = await supabase
 				.from("messages")
 				.insert({
 					ticket_id: existingTicketId,
 					sender_id: customerId,
-					content: emailData.text || emailData.html || "No content provided",
+					content: cleanContent,
 					type: "user",
 					email_message_id: messageId,
 					email_references: references,
@@ -282,6 +240,7 @@ Content to analyze: ${emailData.text || emailData.html}`;
 			console.log("Added reply to existing ticket:", {
 				ticketId: existingTicketId,
 				messageId: message.id,
+				content: cleanContent,
 			});
 
 			return NextResponse.json({
@@ -290,6 +249,60 @@ Content to analyze: ${emailData.text || emailData.html}`;
 				is_reply: true,
 			});
 		}
+
+		// Only fetch focus areas and use LLM for new tickets
+		let focusAreaValue: string | null = null;
+		if (!existingTicketId) {
+			// Fetch available focus areas for this company
+			console.log("Fetching focus areas...");
+			const { data: focusAreas } = await supabase
+				.from("focus_areas")
+				.select("name")
+				.eq("company_id", company.id);
+
+			console.log("Focus areas found:", focusAreas);
+
+			// Auto-generate ticket focus area
+			const model = new ChatOpenAI({
+				model: "gpt-4o-mini",
+				temperature: 0,
+			});
+
+			const focusArea = z.object({
+				focusArea: z.string().describe("The focus area of the ticket"),
+			});
+
+			const structuredLLM = model.withStructuredOutput(focusArea);
+			const prompt = `Specify the most relevant focus area for this customer support ticket. Select from the available options: ${focusAreas?.map((fa) => fa.name).join(", ")}. If the ticket is not related to any of the focus areas, select 'Other'.
+
+Email ${emailData.subject ? `Subject: ${emailData.subject}` : "has no subject"}
+
+Content to analyze: ${emailData.text || emailData.html}`;
+
+			console.log("Sending prompt to LLM:", prompt);
+
+			const chosenFocusArea = await structuredLLM.invoke(prompt);
+			console.log("Chosen focus area:", chosenFocusArea);
+
+			// Convert 'Other' focus area to null
+			focusAreaValue =
+				chosenFocusArea.focusArea === "Other"
+					? null
+					: chosenFocusArea.focusArea;
+		}
+
+		// Process the email
+		console.log("Processing email with params:", {
+			customer_id: customerId,
+			target_company_id: company.id,
+			from_email: fromEmail,
+			has_subject: !!emailData.subject,
+			has_text: !!emailData.text,
+			has_html: !!emailData.html,
+			focus_area: focusAreaValue,
+			message_id: messageId,
+			existing_ticket_id: existingTicketId,
+		});
 
 		// If no existing ticket found, create a new one
 		const { data, error } = await supabase.rpc("process_inbound_email", {
