@@ -3,7 +3,7 @@
 import type { Database } from "@/database.types";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { X, PencilLine } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
@@ -77,15 +77,17 @@ export function ConversationPanel({
 
 	useEffect(() => {
 		setTicket(initialTicket);
-	}, [initialTicket.id]);
+	}, [initialTicket]);
 
-	const scrollToBottom = () => {
+	const scrollToBottom = useCallback(() => {
 		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-	};
+	}, []);
 
+	// Scroll when messages change
 	useEffect(() => {
-		scrollToBottom();
-	}, [messages]);
+		const timeoutId = setTimeout(scrollToBottom, 100);
+		return () => clearTimeout(timeoutId);
+	}, [messages, scrollToBottom]);
 
 	useEffect(() => {
 		const fetchMessages = async () => {
@@ -163,8 +165,9 @@ export function ConversationPanel({
 		setChannel(newChannel);
 
 		return () => {
-			if (channel) {
-				supabase.removeChannel(channel);
+			const supabase = createClient();
+			if (newChannel) {
+				supabase.removeChannel(newChannel);
 			}
 		};
 	}, [ticket.id, isAgent, ticket.customer_id]);
