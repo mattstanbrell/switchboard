@@ -62,41 +62,20 @@ export async function POST(request: Request) {
 
 		const typedTicket = ticket as unknown as SupabaseTicket;
 
-		// Get the original message's email headers if they exist
-		const { data: allMessages } = await supabase
-			.from("messages")
-			.select("*")
-			.eq("ticket_id", ticketId)
-			.order("created_at", { ascending: true });
-
-		console.log("All messages in ticket:", {
-			ticketId,
-			messageCount: allMessages?.length,
-			messages: allMessages?.map((m) => ({
-				id: m.id,
-				type: m.type,
-				sender_id: m.sender_id,
-				hasEmailId: Boolean(m.email_message_id),
-				emailId: m.email_message_id,
-				hasRefs: Boolean(m.email_references),
-				created_at: m.created_at,
-			})),
-		});
-
+		// Get the original message to determine if this is an email ticket
 		const { data: originalMessage } = await supabase
 			.from("messages")
 			.select("email_message_id, email_references")
 			.eq("ticket_id", ticketId)
-			.not("email_message_id", "is", null)
+			.eq("type", "user")
 			.order("created_at", { ascending: true })
 			.limit(1)
 			.single();
 
-		console.log("Original message headers:", {
-			originalMessage,
-			hasMessageId: Boolean(originalMessage?.email_message_id),
-			hasReferences: Boolean(originalMessage?.email_references),
-			ticketId,
+		console.log("Original message:", {
+			hasEmailId: Boolean(originalMessage?.email_message_id),
+			emailId: originalMessage?.email_message_id,
+			references: originalMessage?.email_references,
 		});
 
 		// Insert the message into the database
@@ -115,30 +94,20 @@ export async function POST(request: Request) {
 			throw messageError;
 		}
 
-		// If the ticket has an associated email, send an email reply
-		console.log("Checking email conditions:", {
-			hasTicketEmail: Boolean(typedTicket.email),
-			hasProfiles: Boolean(typedTicket.profiles),
-			hasCompanies: Boolean(typedTicket.profiles?.companies),
-			companiesArray: typedTicket.profiles?.companies,
-			ticketEmail: typedTicket.email,
-			fullProfiles: typedTicket.profiles,
-		});
-
+		// Only send email if this ticket originated from email
 		if (
+			originalMessage?.email_message_id &&
 			typedTicket.email &&
 			typedTicket.profiles &&
 			typedTicket.profiles.companies
 		) {
-			console.log("Email conditions met, preparing to send email");
+			console.log("Email ticket - preparing to send email reply");
 			console.log("Sending email with:", {
 				from: typedTicket.profiles.companies.email,
 				to: typedTicket.email,
 				subject: `Re: Ticket #${ticketId}`,
-				hasInReplyTo: Boolean(originalMessage?.email_message_id),
-				hasReferences: Boolean(originalMessage?.email_references),
-				content:
-					content.substring(0, 100) + (content.length > 100 ? "..." : ""),
+				inReplyTo: originalMessage.email_message_id,
+				references: originalMessage.email_references,
 			});
 
 			try {
@@ -147,8 +116,8 @@ export async function POST(request: Request) {
 					to: typedTicket.email,
 					subject: `Re: Ticket #${ticketId}`,
 					content,
-					inReplyTo: originalMessage?.email_message_id,
-					references: originalMessage?.email_references || [],
+					inReplyTo: originalMessage.email_message_id,
+					references: originalMessage.email_references || [],
 				});
 
 				console.log("Email sent successfully:", { messageId, references });
@@ -175,7 +144,9 @@ export async function POST(request: Request) {
 				throw emailError;
 			}
 		} else {
-			console.log("Email conditions not met, skipping email send");
+			console.log(
+				"Not an email ticket or missing required data - skipping email send",
+			);
 		}
 
 		return NextResponse.json(message);
