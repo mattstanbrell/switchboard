@@ -49,7 +49,9 @@ export const submitTicket = tool(
 
 		// Clear the form state after submission
 		const submittedData = { ...ticketFormState };
-		Object.keys(ticketFormState).forEach((key) => delete ticketFormState[key]);
+		for (const key of Object.keys(ticketFormState)) {
+			delete ticketFormState[key];
+		}
 
 		return `Ticket successfully submitted with data: ${JSON.stringify(submittedData)}`;
 	},
@@ -65,7 +67,7 @@ const llmWithTools = llm.bindTools([updateField, submitTicket]);
 
 // Define tasks
 export const callTool = task("toolCall", async (toolCall: ToolCall) => {
-	const { name, args } = toolCall;
+	const { name, args, id } = toolCall;
 	const myTools = { updateField, submitTicket };
 	const toolFn = myTools[name as keyof typeof myTools];
 
@@ -73,15 +75,29 @@ export const callTool = task("toolCall", async (toolCall: ToolCall) => {
 		return {
 			role: "tool",
 			content: `Error: no tool named "${name}"`,
-			tool_call_id: toolCall.id,
+			tool_call_id: id,
 		};
 	}
 
-	const result = await toolFn.invoke(args);
+	let toolResult: string;
+	switch (name) {
+		case "updateField":
+			toolResult = await updateField.invoke({
+				field: (args as { field: string }).field,
+				value: (args as { value: string }).value,
+			});
+			break;
+		case "submitTicket":
+			toolResult = await submitTicket.invoke({});
+			break;
+		default:
+			throw new Error(`Unknown tool: ${name}`);
+	}
+
 	return {
 		role: "tool",
-		content: result,
-		tool_call_id: toolCall.id,
+		content: toolResult,
+		tool_call_id: id,
 	};
 });
 
@@ -111,8 +127,9 @@ Important:
 // Create the agent
 export const agent = entrypoint(
 	"helpdeskAgent",
-	async (messages: BaseMessageLike[]) => {
-		let llmResponse = await callLlm(messages);
+	async (initialMessages: BaseMessageLike[]) => {
+		let currentMessages = initialMessages;
+		let llmResponse = await callLlm(currentMessages);
 
 		while (true) {
 			const toolCalls = llmResponse.tool_calls;
@@ -123,11 +140,14 @@ export const agent = entrypoint(
 			const toolResults = await Promise.all(
 				toolCalls.map((tc) => callTool(tc)),
 			);
-			messages = addMessages(messages, [llmResponse, ...toolResults]);
-			llmResponse = await callLlm(messages);
+			currentMessages = addMessages(currentMessages, [
+				llmResponse,
+				...toolResults,
+			]);
+			llmResponse = await callLlm(currentMessages);
 		}
 
-		messages = addMessages(messages, [llmResponse]);
-		return messages;
+		currentMessages = addMessages(currentMessages, [llmResponse]);
+		return currentMessages;
 	},
 );
