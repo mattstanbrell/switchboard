@@ -113,6 +113,47 @@ export async function POST(request: Request) {
 			throw new Error("No Message-ID found in headers");
 		}
 
+		// Extract In-Reply-To and References headers
+		const inReplyToMatch = headers.match(/In-Reply-To:\s*<([^>]+)>/i);
+		const inReplyTo = inReplyToMatch ? inReplyToMatch[1] : null;
+
+		const referencesMatch = headers.match(/References:\s*(.*?)(?:\r?\n\S|$)/i);
+		const references = referencesMatch
+			? referencesMatch[1]
+					.split(/\s+/)
+					.map((ref: string) => ref.replace(/[<>]/g, ""))
+					.filter(Boolean)
+			: [];
+
+		console.log("Email headers parsed:", {
+			messageId,
+			inReplyTo,
+			references,
+		});
+
+		// If this is a reply, try to find the existing ticket
+		let existingTicketId: number | null = null;
+		if (inReplyTo || references.length > 0) {
+			const searchMessageIds = [inReplyTo, ...references].filter(Boolean);
+			console.log(
+				"Looking for existing ticket with message IDs:",
+				searchMessageIds,
+			);
+
+			const { data: existingMessage } = await supabase
+				.from("messages")
+				.select("ticket_id")
+				.in("email_message_id", searchMessageIds)
+				.order("created_at", { ascending: true })
+				.limit(1)
+				.single();
+
+			if (existingMessage) {
+				existingTicketId = existingMessage.ticket_id;
+				console.log("Found existing ticket:", existingTicketId);
+			}
+		}
+
 		// Check if this email has been processed before
 		const { data: isNewEmail } = await supabase.rpc("check_and_record_email", {
 			p_message_id: messageId,
@@ -216,8 +257,41 @@ Content to analyze: ${emailData.text || emailData.html}`;
 			has_html: !!emailData.html,
 			focus_area: focusAreaValue,
 			message_id: messageId,
+			existing_ticket_id: existingTicketId,
 		});
 
+		if (existingTicketId) {
+			// Add message to existing ticket
+			const { data: message, error: messageError } = await supabase
+				.from("messages")
+				.insert({
+					ticket_id: existingTicketId,
+					sender_id: customerId,
+					content: emailData.text || emailData.html || "No content provided",
+					type: "user",
+					email_message_id: messageId,
+					email_references: references,
+				})
+				.select()
+				.single();
+
+			if (messageError) {
+				throw messageError;
+			}
+
+			console.log("Added reply to existing ticket:", {
+				ticketId: existingTicketId,
+				messageId: message.id,
+			});
+
+			return NextResponse.json({
+				success: true,
+				ticket_id: existingTicketId,
+				is_reply: true,
+			});
+		}
+
+		// If no existing ticket found, create a new one
 		const { data, error } = await supabase.rpc("process_inbound_email", {
 			customer_id: customerId,
 			target_company_id: company.id,
