@@ -67,9 +67,17 @@ export async function POST(request: Request) {
 			.from("messages")
 			.select("email_message_id, email_references")
 			.eq("ticket_id", ticketId)
+			.eq("type", "user")
+			.neq("sender_id", senderId)
 			.order("created_at", { ascending: true })
 			.limit(1)
 			.single();
+
+		console.log("Original message headers:", {
+			originalMessage,
+			hasMessageId: Boolean(originalMessage?.email_message_id),
+			hasReferences: Boolean(originalMessage?.email_references),
+		});
 
 		// Insert the message into the database
 		const { data: message, error: messageError } = await supabase
