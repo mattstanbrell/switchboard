@@ -27,7 +27,7 @@ export async function sendThreadedEmail({
 	references = [],
 }: SendThreadedEmailParams) {
 	// Generate a new Message-ID for this email
-	const messageId = `<${Date.now()}.${Math.random().toString(36).substring(2)}@switchboard.mattstanbrell.com>`;
+	const messageId = `${Date.now()}.${Math.random().toString(36).substring(2)}@switchboard.mattstanbrell.com`;
 
 	// Combine previous references with the in-reply-to message ID
 	const allReferences = [...references];
@@ -35,22 +35,29 @@ export async function sendThreadedEmail({
 		allReferences.push(inReplyTo);
 	}
 
+	// Format Message-IDs with angle brackets for email headers
+	const formattedMessageId = `<${messageId}>`;
+	const formattedInReplyTo = inReplyTo ? `<${inReplyTo}>` : undefined;
+	const formattedReferences = allReferences.map((ref) => `<${ref}>`);
+
 	const msg = {
 		to,
 		from,
 		subject,
 		text: content,
 		headers: {
-			"Message-ID": messageId,
-			...(inReplyTo && { "In-Reply-To": inReplyTo }),
-			...(allReferences.length > 0 && { References: allReferences.join(" ") }),
+			"Message-ID": formattedMessageId,
+			...(formattedInReplyTo && { "In-Reply-To": formattedInReplyTo }),
+			...(formattedReferences.length > 0 && {
+				References: formattedReferences.join(" "),
+			}),
 		},
 	};
 
 	await sendgrid.send(msg);
 
 	return {
-		messageId,
-		references: allReferences,
+		messageId, // Return without brackets for storage
+		references: allReferences, // Return without brackets for storage
 	};
 }
