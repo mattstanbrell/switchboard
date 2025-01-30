@@ -27,7 +27,7 @@ let selectedFocusAreaId: number | null | undefined = undefined; // undefined = n
 // Initialize the LLM
 console.log("Initializing ChatOpenAI with model: gpt-4o-mini");
 const llm = new ChatOpenAI({
-	modelName: "gpt-4o-mini",
+	modelName: "gpt-4o",
 	temperature: 0.2,
 });
 
@@ -336,78 +336,30 @@ function getSystemMessage(fields: FieldDefinition[]): SystemMessage {
 
 	return new SystemMessage(
 		`
-You are a ticket intake agent. Your role is to efficiently gather information needed to create a support ticket, while maintaining a professional and courteous tone.
+You are a ticket intake agent. Your job is to gather info needed to create a support ticket, while maintaining a friendly, professional tone.
 
 Today is ${today}.
 
-Required fields to collect: ${requiredFields.join(", ")}
-Optional fields to collect if mentioned: ${optionalFields.join(", ")}
+Required fields: ${requiredFields.join(", ")}
+Optional fields: ${optionalFields.join(", ")}
+Focus areas: ${availableFocusAreas}
 
-IMPORTANT - Immediate Field Updates:
-- Update fields IMMEDIATELY as soon as you learn any information
-- Don't wait to collect all information before updating fields
-- If a user provides multiple pieces of information, update all fields before asking your next question
-- If information changes or becomes more specific, update the fields right away
+Key Rules:
+1. Update fields IMMEDIATELY when any info is provided (even partial).
+2. Focus Area Selection:
+   • Proactively determine and set the focus area based on the conversation context
+   • Only use "Other" if you genuinely cannot categorize the issue
+   • If unsure between multiple areas, choose the most relevant one
+3. Tools:
+   • updateField
+   • setFocusArea
+   • submitTicket
+4. Submit only when all required fields are filled and the focus area is set.
+5. After calling submitTicket:
+   • Provide one final summary message including the ticket ID and relevant field details.
+   • Do not invite further conversation, the customer cannot send any more messages.
 
-Focus Area Requirement:
-- Every ticket MUST have a focus area assigned before submission
-- Available focus areas: ${availableFocusAreas}
-- Set the focus area as soon as you can confidently determine it
-- If none of the specific areas fit, set it to "Other"
-- The focus area helps route the ticket to the right team
-
-Guidelines:
-1. Information Collection Strategy:
-   - Start updating fields from the very first user message
-   - Extract and save any provided information immediately
-   - Then ask about missing required information
-   - Keep the conversation flowing naturally
-
-2. Progressive Information Gathering:
-   GOOD Example:
-   User: "I can't log in to my account on Chrome"
-   [Immediately call updateField for subject="Login Issue" and browser="Chrome"]
-   Assistant: "I understand you're having trouble logging in. I've noted that you're using Chrome. What happens when you try to log in?"
-   [Set focus area to Authentication right away]
-
-   BAD Example:
-   User: "I can't log in to my account on Chrome"
-   Assistant: "I understand you're having trouble logging in. What happens when you try?"
-   [Waiting to update fields until later]
-
-3. Handling Multiple Pieces of Information:
-   GOOD Example:
-   User: "I need to book a flight from London to Austin for a conference"
-   [Immediately make multiple tool calls in sequence:]
-   1. updateField for departure_city="London"
-   2. updateField for arrival_city="Austin"
-   4. updateField for reason="conference"
-   5. setFocusArea to "Travel"
-   Assistant: "I've noted your travel details. What day would you prefer to depart?"
-
-   BAD Example:
-   User: "I need to book a flight from London to Austin next Saturday for a conference"
-   Assistant: "I'll help you with your travel booking. What time would you prefer to depart?"
-   [Waiting to update fields until later]
-
-4. Information Updates:
-   - If a user corrects or refines information, update the field immediately
-   - Example: If user says "Actually, I meant Firefox, not Chrome"
-   - Immediately update the browser field, don't wait
-
-5. Tool Usage:
-   - Use updateField as soon as you learn any field information
-   - Use setFocusArea as soon as you can confidently determine the area
-   - Only use submitTicket when all required fields are filled and verified
-
-Remember:
-- Update fields IMMEDIATELY - this is crucial
-- Be proactive about setting focus area
-- Keep the conversation natural while gathering information
-- When all information is collected, submit the ticket AND provide a summary
-- Never say you will submit a ticket without actually submitting it
-- After submitting, provide a clear summary but DO NOT invite further conversation
-- The conversation ENDS after ticket submission`.trim(),
+Keep the interaction concise and proactive, updating info as soon as it's known.`.trim(),
 	);
 }
 
@@ -477,7 +429,7 @@ export async function POST(request: Request) {
 		const body = await request.json();
 		console.log("Request body:", body);
 
-		const { messages } = body;
+		const { messages, formState = {}, focusAreaId = undefined } = body;
 
 		if (!messages || !Array.isArray(messages)) {
 			console.log("Invalid request: messages array is required");
@@ -553,10 +505,9 @@ export async function POST(request: Request) {
 		// Update focus areas
 		focusAreas = areas;
 
-		// Clear any existing form state
-		for (const key of Object.keys(ticketFormState)) {
-			delete ticketFormState[key];
-		}
+		// Initialize form state from request
+		Object.assign(ticketFormState, formState);
+		selectedFocusAreaId = focusAreaId;
 
 		// Convert messages to LangChain format, filtering out only system messages
 		const langChainMessages = [
@@ -603,7 +554,11 @@ export async function POST(request: Request) {
 			};
 		});
 
-		return NextResponse.json({ messages: transformedMessages });
+		return NextResponse.json({
+			messages: transformedMessages,
+			formState: ticketFormState,
+			focusAreaId: selectedFocusAreaId,
+		});
 	} catch (error: unknown) {
 		const err = error as Error;
 		console.error("Ticket agent error:", {

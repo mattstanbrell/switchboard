@@ -40,6 +40,10 @@ export function CustomerChatbot() {
 	const [inputValue, setInputValue] = useState("");
 	const [isLoading, setIsLoading] = useState(false);
 	const [isSubmitted, setIsSubmitted] = useState(false);
+	const [formState, setFormState] = useState<Record<string, string>>({});
+	const [focusAreaId, setFocusAreaId] = useState<number | null | undefined>(
+		undefined,
+	);
 	const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
 	// Add effect to handle ticket submission
@@ -47,7 +51,8 @@ export function CustomerChatbot() {
 		const hasSubmittedTicket = messages.some(
 			(message) =>
 				message.role === "tool" &&
-				message.content.includes("Ticket successfully submitted"),
+				message.content.includes("Ticket #") &&
+				message.content.includes("successfully created"),
 		);
 		if (hasSubmittedTicket) {
 			setIsSubmitted(true);
@@ -94,6 +99,8 @@ export function CustomerChatbot() {
 				},
 				body: JSON.stringify({
 					messages: [...messages, userMessage],
+					formState,
+					focusAreaId,
 				}),
 			});
 
@@ -111,6 +118,13 @@ export function CustomerChatbot() {
 			if (Array.isArray(data.messages) && data.messages.length > 0) {
 				console.log("Setting messages to server's response:", data.messages);
 				setMessages(data.messages);
+				// Update form state from response
+				if (data.formState) {
+					setFormState(data.formState);
+				}
+				if ("focusAreaId" in data) {
+					setFocusAreaId(data.focusAreaId);
+				}
 			} else {
 				console.log("No valid messages array in response");
 				const errorMessage = {
@@ -144,7 +158,9 @@ export function CustomerChatbot() {
 		// For tool messages, simplify the content if it's a field update
 		const isFieldUpdate = isTool && message.content.includes('Field "');
 		const isTicketSubmitted =
-			isTool && message.content.includes("Ticket successfully submitted");
+			isTool &&
+			message.content.includes("Ticket #") &&
+			message.content.includes("successfully created");
 
 		// Extract the actual content from tool result messages
 		const toolContent = message.content.startsWith("Tool Result:")
