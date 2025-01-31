@@ -25,7 +25,7 @@ const ticketFormState: Record<string, string> = {};
 let selectedFocusAreaId: number | null | undefined = undefined; // undefined = not set, null = "Other"
 
 // Initialize the LLM
-console.log("Initializing ChatOpenAI with model: gpt-4o-mini");
+console.log("Initializing ChatOpenAI with model: gpt-4o");
 const llm = new ChatOpenAI({
 	modelName: "gpt-4o",
 	temperature: 0.2,
