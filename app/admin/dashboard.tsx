@@ -19,6 +19,7 @@ import {
 	Pencil,
 	Trash2,
 	Search,
+	LogOut,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
@@ -708,6 +709,12 @@ export default function AdminDashboard({
 				</Card>
 			</div>
 		);
+	};
+
+	const handleSignOut = async () => {
+		const supabase = createClient();
+		await supabase.auth.signOut();
+		window.location.href = "/";
 	};
 
 	const renderContent = () => {
@@ -1613,40 +1620,55 @@ export default function AdminDashboard({
 	};
 
 	return (
-		<div className="flex min-h-screen">
+		<div className="flex h-screen bg-custom-background">
 			{/* Sidebar */}
-			<div className="w-64 bg-card border-r">
+			<div className="w-64 bg-custom-background-secondary border-r border-custom-ui-medium flex flex-col">
+				{/* Admin Info */}
 				<div className="p-6">
-					<h1 className="text-xl font-bold mb-2">Admin Dashboard</h1>
-					<p className="text-sm text-muted-foreground mb-6">
+					<h1 className="text-2xl font-bold text-custom-text mb-2">
+						Admin Dashboard
+					</h1>
+					<p className="text-sm text-custom-text-secondary mb-4">
 						{initialProfile.full_name}
 					</p>
+				</div>
 
-					<nav className="space-y-1">
+				{/* Navigation Items */}
+				<div className="flex-1 p-4">
+					<div className="space-y-2">
 						{navItems.map((item) => (
 							<button
 								type="button"
 								key={item.id}
 								onClick={() => setActiveSection(item.id)}
-								className={`w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg transition-colors
-                  ${
-										activeSection === item.id
-											? "bg-primary text-primary-foreground"
-											: "text-muted-foreground hover:bg-muted"
-									}`}
+								className={`w-full flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors ${
+									activeSection === item.id
+										? "bg-primary text-primary-foreground"
+										: "hover:bg-custom-ui-faint text-custom-text"
+								}`}
 							>
 								{item.icon}
-								{item.label}
+								<span>{item.label}</span>
 							</button>
 						))}
-					</nav>
+					</div>
+				</div>
+
+				{/* Sign Out Button */}
+				<div className="p-4 border-t border-custom-ui-medium">
+					<Button
+						variant="ghost"
+						className="w-full flex items-center justify-start space-x-3 text-custom-text hover:bg-custom-ui-faint hover:text-custom-text"
+						onClick={handleSignOut}
+					>
+						<LogOut className="w-5 h-5" />
+						<span>Sign Out</span>
+					</Button>
 				</div>
 			</div>
 
 			{/* Main Content */}
-			<div className="flex-1 p-8 bg-background overflow-auto">
-				{renderContent()}
-			</div>
+			<div className="flex-1 overflow-auto p-8">{renderContent()}</div>
 		</div>
 	);
 }
