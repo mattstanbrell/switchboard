@@ -118,6 +118,7 @@ export function CustomerChatbot() {
 			if (Array.isArray(data.messages) && data.messages.length > 0) {
 				console.log("Setting messages to server's response:", data.messages);
 				setMessages(data.messages);
+
 				// Update form state from response
 				if (data.formState) {
 					setFormState(data.formState);
